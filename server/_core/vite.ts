@@ -3,21 +3,45 @@ import fs from "fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
 import path from "path";
-import { createServer as createViteServer } from "vite";
-import viteConfig from "../../vite.config";
+
+// NOTE: `vite` and `../../vite.config` (which pulls in vite plugins) are
+// dev-only. They MUST stay dynamic imports: the production bundle is built
+// with `--packages=external` and the runtime image installs production
+// dependencies only, so a static import would crash the server at boot
+// with ERR_MODULE_NOT_FOUND.
 
 export async function setupVite(app: Express, server: Server) {
-  const serverOptions = {
-    middlewareMode: true,
-    hmr: { server },
-    allowedHosts: true as const,
-  };
+  // All dev-only modules use dynamic BARE imports: with
+  // `--packages=external` esbuild leaves those as runtime imports, so the
+  // production bundle never statically imports them. The runtime image
+  // installs production dependencies only, and a static import would crash
+  // the server at boot with ERR_MODULE_NOT_FOUND. (setupVite only ever runs
+  // with NODE_ENV=development, via tsx from source.)
+  const { createServer: createViteServer } = await import("vite");
+  const react = (await import("@vitejs/plugin-react")).default;
+  const tailwindcss = (await import("@tailwindcss/vite")).default;
+  const { jsxLocPlugin } = await import("@builder.io/vite-plugin-jsx-loc");
 
+  const projectRoot = path.resolve(import.meta.dirname, "..", "..");
   const vite = await createViteServer({
-    ...viteConfig,
     configFile: false,
-    server: serverOptions,
     appType: "custom",
+    plugins: [react(), tailwindcss(), jsxLocPlugin()],
+    resolve: {
+      alias: {
+        "@": path.resolve(projectRoot, "client", "src"),
+        "@shared": path.resolve(projectRoot, "shared"),
+        "@assets": path.resolve(projectRoot, "attached_assets"),
+      },
+    },
+    envDir: projectRoot,
+    root: path.resolve(projectRoot, "client"),
+    publicDir: path.resolve(projectRoot, "client", "public"),
+    server: {
+      middlewareMode: true,
+      hmr: { server },
+      allowedHosts: true as const,
+    },
   });
 
   app.use(vite.middlewares);
