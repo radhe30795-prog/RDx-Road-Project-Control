@@ -424,11 +424,13 @@ export async function getDailyProgressList(params?: { roadId?: number; date?: st
     activity: activities,
     boq: boqItems,
     material: materialInventory,
+    asset: machineryAssets,
   }).from(dailyProgress)
     .leftJoin(roads, eq(dailyProgress.roadId, roads.id))
     .leftJoin(activities, eq(dailyProgress.activityId, activities.id))
     .leftJoin(boqItems, eq(dailyProgress.boqItemId, boqItems.id))
     .leftJoin(materialInventory, eq(dailyProgress.materialId, materialInventory.id))
+    .leftJoin(machineryAssets, eq(dailyProgress.machineryAssetId, machineryAssets.id))
     .orderBy(desc(dailyProgress.date), desc(dailyProgress.id));
 
   return rows.filter((r) => {
@@ -582,6 +584,74 @@ export async function createDailyProgress(data: InsertDailyProgress) {
           entityId: mat.materialCode,
         });
       }
+    }
+  }
+
+  // AUTOMATION: Material Section — record site receipt as a GRN (stock increases via createGrn)
+  if (data.sectionType === "Material" && data.materialId && parseFloat(String(data.materialReceivedQuantity || 0)) > 0) {
+    const received = parseFloat(String(data.materialReceivedQuantity));
+    const matRows = await db.select().from(materialInventory).where(eq(materialInventory.id, data.materialId)).limit(1);
+    if (matRows.length > 0) {
+      const mat = matRows[0];
+      await createGrn({
+        grnNo: `GRN-DPR-${data.date}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+        grnDate: data.date,
+        projectId: data.projectId,
+        materialId: data.materialId,
+        supplier: data.materialSupplier || "Site receipt (DPR)",
+        challanNo: data.materialChallanNo || undefined,
+        receivedQuantity: String(received),
+        acceptedQuantity: String(received),
+        unit: mat.unit,
+        rate: "0.00",
+        remarks: `DPR Material section entry on ${data.date}${data.materialStorageLocation ? ` — stored at ${data.materialStorageLocation}` : ""}`,
+      });
+    }
+  }
+
+  // AUTOMATION: Material Section — record wastage (deduct from balance, accumulate wastage)
+  if (data.sectionType === "Material" && data.materialId && parseFloat(String(data.materialWastageQuantity || 0)) > 0) {
+    const wastage = parseFloat(String(data.materialWastageQuantity));
+    const matRows = await db.select().from(materialInventory).where(eq(materialInventory.id, data.materialId)).limit(1);
+    if (matRows.length > 0) {
+      const mat = matRows[0];
+      await db.update(materialInventory).set({
+        wastageQuantity: (parseFloat(String(mat.wastageQuantity)) + wastage).toFixed(3),
+        balanceQuantity: (parseFloat(String(mat.balanceQuantity)) - wastage).toFixed(3),
+      }).where(eq(materialInventory.id, data.materialId));
+    }
+  }
+
+  // AUTOMATION: Machine Section — create machinery log and update asset hour meter / status
+  if (data.sectionType === "Machine" && data.machineryAssetId) {
+    const openH = parseFloat(String(data.hourMeterOpening || 0));
+    const closeH = parseFloat(String(data.hourMeterClosing || 0));
+    await createMachineryLog({
+      logNo: `LOG-DPR-${data.date}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+      logDate: data.date,
+      projectId: data.projectId,
+      roadId: data.roadId,
+      assetId: data.machineryAssetId,
+      openingHourMeter: String(openH),
+      closingHourMeter: String(closeH),
+      fuelIssued: String(parseFloat(String(data.fuelConsumed || 0))),
+      operator: data.machineOperator || undefined,
+      workDescription: [
+        data.machineLocation ? `Deployed at ${data.machineLocation}` : "",
+        data.machineIdleHours && parseFloat(String(data.machineIdleHours)) > 0
+          ? `Idle ${data.machineIdleHours}h${data.machineIdleReason ? ` (${data.machineIdleReason})` : ""}`
+          : "",
+        data.remarks || "",
+      ].filter(Boolean).join(" | ") || undefined,
+      remarks: `DPR Machine section entry — status: ${data.machineStatus || "Working"}`,
+    });
+    // Breakdown / Maintenance overrides the "Deployed" status set by createMachineryLog
+    if (data.machineStatus === "Breakdown" || data.machineStatus === "Maintenance") {
+      await db.update(machineryAssets).set({
+        status: "Maintenance",
+        operator: data.machineOperator || undefined,
+        updatedAt: new Date(),
+      }).where(eq(machineryAssets.id, data.machineryAssetId));
     }
   }
 
