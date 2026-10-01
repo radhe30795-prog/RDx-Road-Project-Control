@@ -1210,6 +1210,37 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         return db.createMachineryLog(input);
       }),
+    complianceList: publicProcedure
+      .input(z.object({ projectId: z.number().optional() }).nullish())
+      .query(async ({ input }) => {
+        return db.getMachineryCompliance(input?.projectId);
+      }),
+    createCompliance: publicProcedure
+      .input(z.object({
+        assetId: z.number(),
+        projectId: z.number(),
+        docType: z.enum(["Registration", "PUC", "Road Tax", "Insurance", "Fitness", "Permit", "Service", "Other"]),
+        docNumber: z.string().optional(),
+        issueDate: z.string().optional(),
+        expiryDate: z.string(),
+        amount: z.string().optional(),
+        vendor: z.string().optional(),
+        meterReading: z.string().optional(),
+        remarks: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return db.createMachineryCompliance(input);
+      }),
+    deleteCompliance: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        return db.deleteMachineryCompliance(input.id);
+      }),
+    generateComplianceAlerts: publicProcedure
+      .input(z.object({ projectId: z.number().optional() }).nullish())
+      .mutation(async ({ input }) => {
+        return db.generateComplianceAlerts(input?.projectId);
+      }),
   }),
 
   // 10C. DIGITAL SIGN-OFF WORKFLOW ROUTER
