@@ -20,6 +20,7 @@ import {
 import { toast } from "sonner";
 import { useRole } from "../components/AppLayout";
 import DateDprDetailModal from "../components/DateDprDetailModal";
+import { downloadRaBillExcel } from "../lib/raBillExcel";
 
 const WORKFLOW_STAGES = [
   "Measurement",
@@ -37,6 +38,12 @@ export default function BillingPage() {
   const [selectedRoadId, setSelectedRoadId] = useState<string>("All Roads");
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isAutoGenerateOpen, setIsAutoGenerateOpen] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
+  const [exportBillNo, setExportBillNo] = useState("3rd. RA Bill");
+  const [exportPeriodFrom, setExportPeriodFrom] = useState("2026-09-01");
+  const [exportPeriodTo, setExportPeriodTo] = useState(new Date().toISOString().split("T")[0]);
+  const [exportRoadIds, setExportRoadIds] = useState<number[]>([]);
+  const [isExporting, setIsExporting] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedBill, setSelectedBill] = useState<any>(null);
   const [isDprAuditOpen, setIsDprAuditOpen] = useState(false);
@@ -71,6 +78,17 @@ export default function BillingPage() {
   const { data: roads } = trpc.roads.list.useQuery();
   const { data: projects } = trpc.projects.list.useQuery();
   const activeProjectId = projects?.[0]?.id || 1;
+
+  // Lazy query for RA Bill Excel export data (fetched only when user clicks export)
+  const exportQuery = trpc.billing.getBillExportData.useQuery(
+    {
+      projectId: activeProjectId,
+      roadIds: exportRoadIds.length > 0 ? exportRoadIds : undefined,
+      periodFrom: exportPeriodFrom,
+      periodTo: exportPeriodTo,
+    },
+    { enabled: false }
+  );
 
   const createBill = trpc.billing.create.useMutation({
     onSuccess: () => {
@@ -124,6 +142,40 @@ export default function BillingPage() {
     });
   };
 
+  const handleExportExcel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsExporting(true);
+    try {
+      const result = await exportQuery.refetch();
+      const billData = result.data;
+      if (!billData || billData.length === 0) {
+        toast.error("No approved measurements found for the selected period/roads");
+        setIsExporting(false);
+        return;
+      }
+      const project = projects?.[0];
+      downloadRaBillExcel(billData as any, {
+        billNo: exportBillNo.trim() || "RA Bill",
+        periodFrom: exportPeriodFrom,
+        periodTo: exportPeriodTo,
+        projectName: project?.projectName || "PMGSY-IV Batch-I (CG 16-201)",
+        clientName: (project as any)?.clientName || "PMGSY Ambikapur",
+        contractorName: (project as any)?.contractorName || "Shri Sai Associates, Raigarh",
+      });
+      setIsExportOpen(false);
+      toast.success(`Excel downloaded: ${billData.length} road sheets + Abstract`);
+    } catch (err: any) {
+      toast.error(err.message || "Export failed");
+    }
+    setIsExporting(false);
+  };
+
+  const toggleExportRoad = (id: number) => {
+    setExportRoadIds(prev =>
+      prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -150,6 +202,13 @@ export default function BillingPage() {
           >
             <Calendar className="w-4 h-4 text-slate-950" />
             <span>Inspect DPR & Bill Qty by Date</span>
+          </button>
+          <button
+            onClick={() => setIsExportOpen(true)}
+            className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-blue-200" />
+            <span>Export RA Bill Excel</span>
           </button>
           <button
             onClick={() => {
@@ -338,6 +397,101 @@ export default function BillingPage() {
           </table>
         </div>
       </div>
+
+      {/* Modal: Export RA Bill Excel (measurement-sheet format) */}
+      {isExportOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <FileSpreadsheet className="w-5 h-5 text-blue-600" /> Export RA Bill Excel
+              </h2>
+              <button onClick={() => setIsExportOpen(false)} className="text-slate-400 hover:text-slate-600 text-sm font-bold">
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Approved e-MB measurements se road-wise sheets (aapke 2nd RA wale format me) + Abstract sheet banegi.
+              Previous = period se pehle ka kaam, Current = is period ka kaam.
+            </p>
+
+            <form onSubmit={handleExportExcel} className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700">Bill Number *</label>
+                <input
+                  type="text"
+                  required
+                  value={exportBillNo}
+                  onChange={(e) => setExportBillNo(e.target.value)}
+                  placeholder="e.g. 3rd. RA Bill"
+                  className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-mono font-bold"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700">Period From *</label>
+                  <input
+                    type="date"
+                    required
+                    value={exportPeriodFrom}
+                    onChange={(e) => setExportPeriodFrom(e.target.value)}
+                    className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700">Period To *</label>
+                  <input
+                    type="date"
+                    required
+                    value={exportPeriodTo}
+                    onChange={(e) => setExportPeriodTo(e.target.value)}
+                    className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700">
+                  Roads <span className="font-normal text-slate-400">(khali = saari 14 roads)</span>
+                </label>
+                <div className="mt-1 max-h-40 overflow-y-auto border border-slate-200 rounded-lg bg-slate-50 p-2 space-y-1">
+                  {roads?.map((r) => (
+                    <label key={r.id} className="flex items-center gap-2 text-xs font-semibold text-slate-700 hover:bg-white px-2 py-1 rounded cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={exportRoadIds.includes(r.id)}
+                        onChange={() => toggleExportRoad(r.id)}
+                        className="w-3.5 h-3.5 accent-blue-700"
+                      />
+                      {r.roadId} - {r.roadName}
+                    </label>
+                  ))}
+                </div>
+                {exportRoadIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setExportRoadIds([])}
+                    className="mt-1 text-[11px] text-blue-700 font-bold hover:underline"
+                  >
+                    Clear selection (all roads)
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={isExporting || exportQuery.isFetching}
+                className="w-full py-2.5 bg-blue-700 hover:bg-blue-800 disabled:bg-slate-300 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                {isExporting || exportQuery.isFetching ? "Generating Excel..." : "Download RA Bill Excel"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Modal: 1-Click Auto Generate RA Bill from BOQ */}
       {isAutoGenerateOpen && (
