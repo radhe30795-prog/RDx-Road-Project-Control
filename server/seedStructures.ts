@@ -1,0 +1,342 @@
+import { drizzle } from "drizzle-orm/mysql2";
+import mysql from "mysql2/promise";
+import { roadStructures, roads, projects } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
+
+async function seedStructures() {
+  const connection = await mysql.createConnection(process.env.DATABASE_URL!);
+  const db = drizzle(connection);
+
+  console.log("Checking project & roads for structures seed...");
+  const [project] = await db.select().from(projects).limit(1);
+  const roadList = await db.select().from(roads);
+
+  if (!project || !roadList.length) {
+    console.log("No projects or roads found. Skipping.");
+    process.exit(0);
+  }
+
+  const existing = await db.select().from(roadStructures);
+  if (existing.length > 0) {
+    console.log(`Structures already exist (${existing.length} records). Skipping seed.`);
+    process.exit(0);
+  }
+
+  console.log("Seeding structures, culverts, protection walls and drains across 14 roads...");
+
+  const structuresData = [
+    // RD-01 (SH-42)
+    {
+      structureNo: "RD01-SC-01",
+      roadId: roadList[0].id,
+      structureType: "Slab Culvert" as const,
+      chainageFrom: "1+250",
+      chainageTo: "1+260",
+      locationDescription: "Near Canal Crossing - Double Span RCC Slab",
+      count: "1.00",
+      length: "10.000",
+      width: "8.500",
+      height: "2.500",
+      quantity: "1.000",
+      unit: "Nos",
+      status: "Completed" as const,
+      billableQuantity: "1.000",
+      remarks: "Deck slab casted, wearing coat completed.",
+    },
+    {
+      structureNo: "RD01-HPC-01",
+      roadId: roadList[0].id,
+      structureType: "HPC" as const,
+      chainageFrom: "2+100",
+      chainageTo: "2+110",
+      locationDescription: "Village Entry Cross Drainage (1000mm NP4 Pipe)",
+      count: "2.00",
+      length: "12.000",
+      width: "1.200",
+      height: "1.200",
+      quantity: "2.000",
+      unit: "Nos",
+      status: "Completed" as const,
+      billableQuantity: "2.000",
+      remarks: "Cradle bedding and headwalls finished.",
+    },
+    {
+      structureNo: "RD01-HPC-02",
+      roadId: roadList[0].id,
+      structureType: "HPC" as const,
+      chainageFrom: "3+850",
+      chainageTo: "3+860",
+      locationDescription: "Agricultural Drain Crossing (900mm NP3 Pipe)",
+      count: "1.00",
+      length: "10.500",
+      width: "1.000",
+      height: "1.000",
+      quantity: "1.000",
+      unit: "Nos",
+      status: "In Progress" as const,
+      billableQuantity: "0.500",
+      remarks: "Pipes laid, headwall stone masonry in progress.",
+    },
+    {
+      structureNo: "RD01-RW-01",
+      roadId: roadList[0].id,
+      structureType: "Retaining Wall" as const,
+      chainageFrom: "2+300",
+      chainageTo: "2+650",
+      locationDescription: "Pond Side Embankment Protection (RHS)",
+      count: "1.00",
+      length: "350.000",
+      width: "0.750",
+      height: "3.200",
+      quantity: "350.000",
+      unit: "Rmt",
+      status: "Completed" as const,
+      billableQuantity: "350.000",
+      remarks: "Stone masonry with weep holes completed.",
+    },
+    {
+      structureNo: "RD01-TW-01",
+      roadId: roadList[0].id,
+      structureType: "Toe Wall" as const,
+      chainageFrom: "0+800",
+      chainageTo: "1+200",
+      locationDescription: "Slope Protection Near Canal Reach (LHS)",
+      count: "1.00",
+      length: "400.000",
+      width: "0.600",
+      height: "1.200",
+      quantity: "400.000",
+      unit: "Rmt",
+      status: "In Progress" as const,
+      billableQuantity: "280.000",
+      remarks: "280m completed, balance in progress.",
+    },
+    {
+      structureNo: "RD01-DR-01",
+      roadId: roadList[0].id,
+      structureType: "Drain" as const,
+      chainageFrom: "0+000",
+      chainageTo: "1+500",
+      locationDescription: "Pucca RCC Roadside Drain in Habitation (Both Sides)",
+      count: "1.00",
+      length: "1500.000",
+      width: "0.600",
+      height: "0.800",
+      quantity: "1500.000",
+      unit: "Rmt",
+      status: "Completed" as const,
+      billableQuantity: "1500.000",
+      remarks: "Precast cover slabs fitted.",
+    },
+
+    // RD-02 (MDR-11)
+    {
+      structureNo: "RD02-SC-01",
+      roadId: roadList[1].id,
+      structureType: "Slab Culvert" as const,
+      chainageFrom: "0+950",
+      chainageTo: "0+960",
+      locationDescription: "Stream Crossing 4.0m Clear Span",
+      count: "1.00",
+      length: "8.500",
+      width: "4.000",
+      height: "2.200",
+      quantity: "1.000",
+      unit: "Nos",
+      status: "In Progress" as const,
+      billableQuantity: "0.600",
+      remarks: "Abutment masonry complete, shuttering ready.",
+    },
+    {
+      structureNo: "RD02-HPC-01",
+      roadId: roadList[1].id,
+      structureType: "HPC" as const,
+      chainageFrom: "1+800",
+      chainageTo: "1+810",
+      locationDescription: "Field Drainage Pipe 1000mm",
+      count: "1.00",
+      length: "10.000",
+      width: "1.200",
+      height: "1.200",
+      quantity: "1.000",
+      unit: "Nos",
+      status: "Completed" as const,
+      billableQuantity: "1.000",
+      remarks: "Fully executed.",
+    },
+    {
+      structureNo: "RD02-RW-01",
+      roadId: roadList[1].id,
+      structureType: "Retaining Wall" as const,
+      chainageFrom: "3+100",
+      chainageTo: "3+300",
+      locationDescription: "Valley Side High Embankment (LHS)",
+      count: "1.00",
+      length: "200.000",
+      width: "0.800",
+      height: "2.800",
+      quantity: "200.000",
+      unit: "Rmt",
+      status: "In Progress" as const,
+      billableQuantity: "120.000",
+      remarks: "120m completed.",
+    },
+    {
+      structureNo: "RD02-DR-01",
+      roadId: roadList[1].id,
+      structureType: "Drain" as const,
+      chainageFrom: "0+500",
+      chainageTo: "1+200",
+      locationDescription: "Covered Masonry Drain in Market Stretch",
+      count: "1.00",
+      length: "700.000",
+      width: "0.500",
+      height: "0.600",
+      quantity: "700.000",
+      unit: "Rmt",
+      status: "In Progress" as const,
+      billableQuantity: "450.000",
+      remarks: "450m casted.",
+    },
+
+    // RD-03 (Bypass Sector 4)
+    {
+      structureNo: "RD03-BOX-01",
+      roadId: roadList[2].id,
+      structureType: "Box Culvert" as const,
+      chainageFrom: "2+400",
+      chainageTo: "2+415",
+      locationDescription: "Twin Cell 3x3m RCC Box Culvert",
+      count: "1.00",
+      length: "14.000",
+      width: "6.000",
+      height: "3.000",
+      quantity: "1.000",
+      unit: "Nos",
+      status: "Completed" as const,
+      billableQuantity: "1.000",
+      remarks: "Base raft, walls and top slab tested & passed.",
+    },
+    {
+      structureNo: "RD03-HPC-01",
+      roadId: roadList[2].id,
+      structureType: "HPC" as const,
+      chainageFrom: "0+650",
+      chainageTo: "0+660",
+      locationDescription: "Storm Water Pipe Culvert",
+      count: "1.00",
+      length: "12.000",
+      width: "1.200",
+      height: "1.200",
+      quantity: "1.000",
+      unit: "Nos",
+      status: "Completed" as const,
+      billableQuantity: "1.000",
+      remarks: "Completed.",
+    },
+    {
+      structureNo: "RD03-TW-01",
+      roadId: roadList[2].id,
+      structureType: "Toe Wall" as const,
+      chainageFrom: "1+500",
+      chainageTo: "2+100",
+      locationDescription: "Toe Protection at Deep Cut Fill Section",
+      count: "1.00",
+      length: "600.000",
+      width: "0.600",
+      height: "1.000",
+      quantity: "600.000",
+      unit: "Rmt",
+      status: "In Progress" as const,
+      billableQuantity: "350.000",
+      remarks: "350m completed.",
+    },
+
+    // RD-04 to RD-14 representative entries
+    ...roadList.slice(3).flatMap((r, i) => [
+      {
+        structureNo: `${r.roadId}-HPC-01`,
+        roadId: r.id,
+        structureType: "HPC" as const,
+        chainageFrom: "0+450",
+        chainageTo: "0+460",
+        locationDescription: "Field crossing drainage culvert (900mm pipe)",
+        count: "1.00",
+        length: "9.500",
+        width: "1.000",
+        height: "1.000",
+        quantity: "1.000",
+        unit: "Nos",
+        status: (i % 2 === 0 ? "Completed" : "In Progress") as any,
+        billableQuantity: "1.000",
+        remarks: "Cross-drainage pipe culvert.",
+      },
+      {
+        structureNo: `${r.roadId}-SC-01`,
+        roadId: r.id,
+        structureType: "Slab Culvert" as const,
+        chainageFrom: "1+800",
+        chainageTo: "1+810",
+        locationDescription: "Natural Nallah Crossing 3.0m Span",
+        count: "1.00",
+        length: "8.000",
+        width: "3.000",
+        height: "2.000",
+        quantity: "1.000",
+        unit: "Nos",
+        status: (i % 3 === 0 ? "Completed" : "Not Started") as any,
+        billableQuantity: i % 3 === 0 ? "1.000" : "0.000",
+        remarks: "Standard single span RCC culvert.",
+      },
+      {
+        structureNo: `${r.roadId}-RW-01`,
+        roadId: r.id,
+        structureType: "Retaining Wall" as const,
+        chainageFrom: "2+200",
+        chainageTo: "2+450",
+        locationDescription: "Embankment & waterbody protection wall",
+        count: "1.00",
+        length: "250.000",
+        width: "0.750",
+        height: "2.500",
+        quantity: "250.000",
+        unit: "Rmt",
+        status: "In Progress" as const,
+        billableQuantity: "140.000",
+        remarks: "RR Stone Masonry protection work.",
+      },
+      {
+        structureNo: `${r.roadId}-DR-01`,
+        roadId: r.id,
+        structureType: "Drain" as const,
+        chainageFrom: "0+000",
+        chainageTo: "0+600",
+        locationDescription: "Village Abadi roadside trapezoidal drain",
+        count: "1.00",
+        length: "600.000",
+        width: "0.600",
+        height: "0.750",
+        quantity: "600.000",
+        unit: "Rmt",
+        status: "In Progress" as const,
+        billableQuantity: "320.000",
+        remarks: "Brick / stone masonry drain.",
+      },
+    ]),
+  ];
+
+  for (const s of structuresData) {
+    await db.insert(roadStructures).values({
+      ...s,
+      projectId: project.id,
+    });
+  }
+
+  console.log(`Successfully seeded ${structuresData.length} structures across all 14 roads!`);
+  process.exit(0);
+}
+
+seedStructures().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
