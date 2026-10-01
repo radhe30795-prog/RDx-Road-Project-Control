@@ -94,6 +94,7 @@ export const activities = mysqlTable("activities", {
     "GSB",
     "WMM",
     "Bituminous Work",
+    "CC Pavement",
     "Structures / CD Works",
     "Drain & Protection",
     "Shoulder",
