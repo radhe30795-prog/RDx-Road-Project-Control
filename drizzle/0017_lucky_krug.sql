@@ -1,0 +1,1 @@
+ALTER TABLE `activities` MODIFY COLUMN `phase` enum('Pre-Construction','Earthwork','GSB','WMM','Bituminous Work','CC Pavement','Structures / CD Works','Drain & Protection','Shoulder','Road Furniture','QA/QC','Billing & QS','Hindrance','Completion') NOT NULL;

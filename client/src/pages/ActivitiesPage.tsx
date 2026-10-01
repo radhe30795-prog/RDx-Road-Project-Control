@@ -21,6 +21,7 @@ const PHASES = [
   "GSB",
   "WMM",
   "Bituminous Work",
+  "CC Pavement",
   "Structures / CD Works",
   "Drain & Protection",
   "Shoulder",

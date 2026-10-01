@@ -120,6 +120,13 @@
       "when": 1790865901500,
       "tag": "0016_melodic_kronos",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "5",
+      "when": 1790870000000,
+      "tag": "0017_lucky_krug",
+      "breakpoints": true
     }
   ]
 }
