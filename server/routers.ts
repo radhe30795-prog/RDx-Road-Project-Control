@@ -1,7 +1,8 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { adminProcedure, hrProcedure, publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { adminProcedure, hrProcedure, publicProcedure, protectedProcedure, roleProcedure, router } from "./_core/trpc";
+import { COMMERCIAL_ROLES, isCommercialRole } from "@shared/roles";
 import { z } from "zod";
 import * as db from "./db";
 import { TRPCError } from "@trpc/server";
@@ -614,12 +615,12 @@ export const appRouter = router({
 
   // 4D. ELECTRONIC MEASUREMENT BOOK (e-MB) ROUTER
   measurements: router({
-    list: publicProcedure
+    list: roleProcedure(COMMERCIAL_ROLES)
       .input(z.object({ roadId: z.number().optional(), boqItemId: z.number().optional() }).nullish())
       .query(async ({ input }) => {
         return db.getMeasurements(input?.roadId, input?.boqItemId);
       }),
-    create: publicProcedure
+    create: roleProcedure(COMMERCIAL_ROLES)
       .input(z.object({
         mbNo: z.string(),
         mbDate: z.string(),
@@ -643,7 +644,7 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         return db.createMeasurement(input);
       }),
-    update: publicProcedure
+    update: roleProcedure(COMMERCIAL_ROLES)
       .input(z.object({
         id: z.number(),
         length: z.string().optional(),
@@ -685,17 +686,17 @@ export const appRouter = router({
 
   // 5. BILLING & QS ROUTER
   billing: router({
-    list: publicProcedure
+    list: roleProcedure(COMMERCIAL_ROLES)
       .input(z.object({ roadId: z.number().optional() }).nullish())
       .query(async ({ input }) => {
         return db.getBills(input?.roadId);
       }),
-    getLines: publicProcedure
+    getLines: roleProcedure(COMMERCIAL_ROLES)
       .input(z.object({ billId: z.number() }))
       .query(async ({ input }) => {
         return db.getRaBillLines(input.billId);
       }),
-    generateFromBoq: publicProcedure
+    generateFromBoq: roleProcedure(COMMERCIAL_ROLES)
       .input(z.object({
         billId: z.string(),
         projectId: z.number(),
@@ -710,7 +711,7 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         return db.generateRaBillFromBoq(input);
       }),
-    create: publicProcedure
+    create: roleProcedure(COMMERCIAL_ROLES)
       .input(z.object({
         billId: z.string(),
         projectId: z.number(),
@@ -739,7 +740,7 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         return db.createBill(input);
       }),
-    update: publicProcedure
+    update: roleProcedure(COMMERCIAL_ROLES)
       .input(z.object({
         id: z.number(),
         measurementStatus: z.enum(["Pending", "In Progress", "Completed"]).optional(),
@@ -968,12 +969,18 @@ export const appRouter = router({
 
   // BOQ MASTER & CONTROL ROUTER
   boq: router({
-    list: publicProcedure
+    list: protectedProcedure
       .input(z.object({ projectId: z.number().optional(), roadId: z.number().optional() }).nullish())
-      .query(async ({ input }) => {
-        return db.getBoqItems(input?.projectId, input?.roadId);
+      .query(async ({ input, ctx }) => {
+        const rows = await db.getBoqItems(input?.projectId, input?.roadId);
+        if (isCommercialRole(ctx.user.role)) return rows;
+        // Hide commercial rate fields from site/QA/HR roles (DPR only needs codes & quantities)
+        return rows.map(({ boq, road }) => ({
+          boq: { ...boq, rate: "0.00", contractAmount: null },
+          road,
+        }));
       }),
-    create: publicProcedure
+    create: roleProcedure(COMMERCIAL_ROLES)
       .input(z.object({
         itemCode: z.string().min(2).max(60),
         projectId: z.number(),
@@ -991,7 +998,7 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         return db.createBoqItem(input);
       }),
-    update: publicProcedure
+    update: roleProcedure(COMMERCIAL_ROLES)
       .input(z.object({
         id: z.number(),
         contractQuantity: z.string().optional(),
