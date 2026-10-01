@@ -361,7 +361,7 @@ async function importRow(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, she
   }
 }
 
-const importOrder = ["Projects", "Roads", "Activities", "Employees", "BOQ", "Inventory", "GRN", "Material Issues", "Material Variance", "DPR", "e-MB", "Billing", "Hindrances", "QA-QC", "Materials", "Documents", "Subcontractors", "Work Orders", "Machinery Assets", "Machinery Logs", "Sign-offs"];
+const importOrder = ["Projects", "Roads", "Structures", "Activities", "Employees", "BOQ", "Inventory", "GRN", "Material Issues", "Material Variance", "DPR", "e-MB", "Billing", "Hindrances", "QA-QC", "Materials", "Documents", "Subcontractors", "Work Orders", "Machinery Assets", "Machinery Logs", "Sign-offs"];
 
 export async function importWorkbook(rowsBySheet: WorkbookRows): Promise<ImportSummary> {
   const db = await getDb();
