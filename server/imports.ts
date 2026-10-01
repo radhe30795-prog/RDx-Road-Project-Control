@@ -337,6 +337,8 @@ async function importRow(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, she
       return;
     case "Structures":
       required(row, ["structureNo", "projectId", "roadId", "structureType", "chainageFrom"]);
+      // Upsert on structureNo: re-importing corrects quantities without creating duplicates.
+      // status / billableQuantity are intentionally NOT overwritten (user progress is preserved).
       await db.insert(roadStructures).values({
         structureNo: text(row, "structureNo"),
         projectId: resolve(refs.projects, row, "projectId"),
@@ -354,6 +356,22 @@ async function importRow(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, she
         status: (text(row, "status") || "Not Started") as any,
         billableQuantity: numberText(row, "billableQuantity", "0.000"),
         remarks: optional(row, "remarks"),
+      }).onDuplicateKeyUpdate({
+        set: {
+          projectId: resolve(refs.projects, row, "projectId"),
+          roadId: resolve(refs.roads, row, "roadId"),
+          structureType: text(row, "structureType") as any,
+          chainageFrom: text(row, "chainageFrom"),
+          chainageTo: optional(row, "chainageTo"),
+          locationDescription: optional(row, "locationDescription"),
+          count: numberText(row, "count", "1.00"),
+          length: optional(row, "length"),
+          width: optional(row, "width"),
+          height: optional(row, "height"),
+          quantity: numberText(row, "quantity", "1.000"),
+          unit: text(row, "unit") || "Nos",
+          remarks: optional(row, "remarks"),
+        },
       });
       return;
     default:
