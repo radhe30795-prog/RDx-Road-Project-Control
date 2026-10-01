@@ -16,6 +16,7 @@ import {
   workOrders, InsertWorkOrder,
   machineryAssets, InsertMachineryAsset,
   machineryLogs, InsertMachineryLog,
+  machineryCompliance, InsertMachineryCompliance,
   approvalSignoffs, InsertApprovalSignoff,
   dailyProgress, InsertDailyProgress,
   roadStructures, InsertRoadStructure,
@@ -1698,6 +1699,79 @@ export async function createMachineryLog(data: InsertMachineryLog) {
   }
 
   return res;
+}
+
+// ----------------- MACHINERY COMPLIANCE & SERVICE TRACKER -----------------
+export async function getMachineryCompliance(projectId?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({
+    compliance: machineryCompliance,
+    asset: machineryAssets,
+  }).from(machineryCompliance)
+    .leftJoin(machineryAssets, eq(machineryCompliance.assetId, machineryAssets.id))
+    .orderBy(machineryCompliance.expiryDate);
+
+  if (projectId) return rows.filter(r => r.compliance.projectId === projectId);
+  return rows;
+}
+
+export async function createMachineryCompliance(data: InsertMachineryCompliance) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  return db.insert(machineryCompliance).values(data);
+}
+
+export async function deleteMachineryCompliance(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  return db.delete(machineryCompliance).where(eq(machineryCompliance.id, id));
+}
+
+/**
+ * Generate due-date alerts for machine compliance documents.
+ * Idempotent: skips a record if an unread notification already exists for it,
+ * so the bell doesn't get spammed on every page visit.
+ */
+export async function generateComplianceAlerts(projectId?: number) {
+  const db = await getDb();
+  if (!db) return { created: 0 };
+  const rows = await getMachineryCompliance(projectId);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let created = 0;
+
+  for (const { compliance, asset } of rows) {
+    if (!compliance.expiryDate) continue;
+    const expiry = new Date(compliance.expiryDate + "T00:00:00");
+    if (isNaN(expiry.getTime())) continue;
+    const daysLeft = Math.ceil((expiry.getTime() - today.getTime()) / 86400000);
+    if (daysLeft > 30) continue; // only alert within 30 days / overdue
+
+    const existing = await db.select({ id: notifications.id }).from(notifications)
+      .where(and(
+        eq(notifications.entityType, "MACHINE_COMPLIANCE"),
+        eq(notifications.entityId, String(compliance.id)),
+        eq(notifications.isRead, 0),
+      )).limit(1);
+    if (existing.length > 0) continue;
+
+    const machine = asset ? `${asset.assetNo} (${asset.assetType})` : `Machine #${compliance.assetId}`;
+    const overdue = daysLeft < 0;
+    await db.insert(notifications).values({
+      type: overdue ? "MACHINE_COMPLIANCE_OVERDUE" : "MACHINE_COMPLIANCE_DUE",
+      title: overdue
+        ? `${compliance.docType} EXPIRED: ${machine}`
+        : `${compliance.docType} due in ${daysLeft} day${daysLeft === 1 ? "" : "s"}: ${machine}`,
+      message: `${machine} — ${compliance.docType}${compliance.docNumber ? ` (${compliance.docNumber})` : ""} ${overdue ? `expired on ${compliance.expiryDate}` : `expires on ${compliance.expiryDate}`}. Renew in the Compliance Tracker.`,
+      severity: overdue ? "critical" : "warning",
+      targetRole: "site_engineer",
+      entityType: "MACHINE_COMPLIANCE",
+      entityId: String(compliance.id),
+    });
+    created++;
+  }
+  return { created };
 }
 
 // ----------------- DIGITAL SIGNOFF & JOINT VERIFICATION -----------------
