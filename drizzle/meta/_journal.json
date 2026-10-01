@@ -1,0 +1,111 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1790476054083,
+      "tag": "0000_amazing_landau",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1790476098458,
+      "tag": "0001_parallel_doctor_doom",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1790478925833,
+      "tag": "0002_safe_silver_sable",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1790480239937,
+      "tag": "0003_polite_steve_rogers",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1790484893254,
+      "tag": "0004_nosy_warlock",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1790488026604,
+      "tag": "0005_amusing_sunfire",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1790491826918,
+      "tag": "0006_workable_flatman",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1790495699643,
+      "tag": "0007_sharp_psynapse",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1790505991700,
+      "tag": "0008_concerned_vulture",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1790506861802,
+      "tag": "0009_yielding_the_enforcers",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1790508296050,
+      "tag": "0010_past_sugar_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1790607456050,
+      "tag": "0011_woozy_changeling",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1790609141145,
+      "tag": "0012_zippy_microbe",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1790615436708,
+      "tag": "0013_massive_exodus",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1790620521940,
+      "tag": "0014_charming_silhouette",
+      "breakpoints": true
+    }
+  ]
+}
