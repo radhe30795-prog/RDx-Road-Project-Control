@@ -44,6 +44,29 @@ export const adminProcedure = t.procedure.use(
   }),
 );
 
+/**
+ * roleProcedure([...]) — allows only the given roles.
+ * Module-level guard, e.g. BOQ / Billing / e-MB
+ * restricted to admin, project_manager, qs_billing_engineer.
+ */
+export const roleProcedure = (roles: string[]) =>
+  t.procedure.use(
+    t.middleware(async opts => {
+      const { ctx, next } = opts;
+
+      if (!ctx.user || !roles.includes(ctx.user.role)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Your role does not have permission for this action." });
+      }
+
+      return next({
+        ctx: {
+          ...ctx,
+          user: ctx.user,
+        },
+      });
+    }),
+  );
+
 export const hrProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
