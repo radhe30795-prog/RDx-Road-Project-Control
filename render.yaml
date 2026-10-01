@@ -48,18 +48,12 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
-      # --- File storage (Cloudflare R2, free 10 GB) ---
-      - key: S3_ENDPOINT
+      # --- File storage: Firebase Cloud Storage (free 5 GB, no card needed) ---
+      # STORAGE_BACKEND=firebase (default) or "s3" for S3/R2 via S3_* vars.
+      - key: STORAGE_BACKEND
+        value: firebase
+      # Service-account JSON (raw or base64). Generate free, no card:
+      # Firebase console -> Project settings -> Service accounts ->
+      # Generate new private key. Paste the whole downloaded JSON here.
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
         sync: false
-      - key: S3_REGION
-        value: auto
-      - key: S3_BUCKET
-        value: rdx-uploads
-      - key: S3_ACCESS_KEY_ID
-        sync: false
-      - key: S3_SECRET_ACCESS_KEY
-        sync: false
-      - key: S3_PUBLIC_URL
-        sync: false
-      - key: S3_FORCE_PATH_STYLE
-        value: true

@@ -1,10 +1,10 @@
 import type { Express } from "express";
-import { ENV, isS3Configured } from "./env";
+import { isStorageConfigured, storagePublicUrlFor } from "./env";
 
 /**
- * Serves legacy "/manus-storage/{key}" URLs by redirecting to the
- * S3-compatible public URL. Previously this proxied through the Manus
- * Forge API; it now resolves directly against S3_ENDPOINT/S3_PUBLIC_URL.
+ * Serves legacy "/manus-storage/{key}" URLs by redirecting to the public URL
+ * of the configured storage backend (Firebase Cloud Storage or S3/R2).
+ * Previously this proxied through the Manus Forge API.
  */
 export function registerStorageProxy(app: Express) {
   app.get("/manus-storage/*", async (req, res) => {
@@ -14,13 +14,13 @@ export function registerStorageProxy(app: Express) {
       return;
     }
 
-    if (!isS3Configured()) {
+    if (!isStorageConfigured()) {
       res.status(500).send("Storage proxy not configured");
       return;
     }
 
     try {
-      const url = `${ENV.s3.publicUrl}/${key.replace(/^\/+/, "")}`;
+      const url = storagePublicUrlFor(key);
       res.set("Cache-Control", "public, max-age=31536000, immutable");
       res.redirect(307, url);
     } catch (err) {

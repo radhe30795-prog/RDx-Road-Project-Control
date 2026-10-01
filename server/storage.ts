@@ -1,27 +1,38 @@
-// S3-compatible storage helpers (AWS S3 or Cloudflare R2).
-// Replaces the previous Manus Forge-based implementation.
+// File storage with a pluggable backend.
+//   STORAGE_BACKEND=firebase (default): Firebase Cloud Storage via a service
+//     account (free 5 GB on the Spark plan, no card needed).
+//   STORAGE_BACKEND=s3: S3-compatible (AWS S3 / Cloudflare R2) via S3_* vars.
 // Exported function names/signatures are unchanged so routers keep working.
 //
-// Required env: S3_ENDPOINT, S3_REGION, S3_BUCKET, S3_ACCESS_KEY_ID,
-// S3_SECRET_ACCESS_KEY, S3_PUBLIC_URL (public base URL files are served from),
-// S3_FORCE_PATH_STYLE (default "true"; needed for R2).
+// Firebase setup (free, no card): Firebase console -> Project settings ->
+// Service accounts -> Generate new private key, then set
+// FIREBASE_SERVICE_ACCOUNT_JSON to the downloaded JSON (raw or base64) and
+// VITE_FIREBASE_STORAGE_BUCKET to the bucket name.
 
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { ENV, isS3Configured } from "./_core/env";
+import { Storage } from "@google-cloud/storage";
+import {
+  ENV,
+  getFirebaseServiceAccount,
+  isS3Configured,
+  isStorageConfigured,
+  storagePublicUrlFor,
+} from "./_core/env";
 
-let _client: S3Client | null = null;
+let _s3: S3Client | null = null;
+let _gcs: Storage | null = null;
 
-function getClient(): S3Client {
+function getS3Client(): S3Client {
   if (!isS3Configured()) {
     throw new Error(
-      "Storage not configured: set S3_ENDPOINT, S3_REGION, S3_BUCKET, " +
-        "S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY and S3_PUBLIC_URL",
+      "Storage not configured: set STORAGE_BACKEND=s3 with S3_ENDPOINT, " +
+        "S3_REGION, S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY and S3_PUBLIC_URL",
     );
   }
-  if (!_client) {
+  if (!_s3) {
     const s3 = ENV.s3;
-    _client = new S3Client({
+    _s3 = new S3Client({
       endpoint: s3.endpoint,
       region: s3.region,
       forcePathStyle: s3.forcePathStyle,
@@ -31,7 +42,30 @@ function getClient(): S3Client {
       },
     });
   }
-  return _client;
+  return _s3;
+}
+
+function getGcsBucket() {
+  const sa = getFirebaseServiceAccount();
+  const bucketName = ENV.firebaseStorage.bucket;
+  if (!sa || !bucketName) {
+    throw new Error(
+      "Storage not configured: set STORAGE_BACKEND=firebase with " +
+        "VITE_FIREBASE_STORAGE_BUCKET and FIREBASE_SERVICE_ACCOUNT_JSON " +
+        "(Firebase console -> Project settings -> Service accounts -> " +
+        "Generate new private key)",
+    );
+  }
+  if (!_gcs) {
+    _gcs = new Storage({
+      projectId: sa.project_id,
+      credentials: {
+        client_email: sa.client_email,
+        private_key: sa.private_key,
+      },
+    });
+  }
+  return _gcs.bucket(bucketName);
 }
 
 function normalizeKey(relKey: string): string {
@@ -45,10 +79,6 @@ function appendHashSuffix(relKey: string): string {
   return `${relKey.slice(0, lastDot)}_${hash}${relKey.slice(lastDot)}`;
 }
 
-function publicUrlFor(key: string): string {
-  return `${ENV.s3.publicUrl}/${key}`;
-}
-
 function toBody(data: Buffer | Uint8Array | string): Buffer {
   if (typeof data === "string") return Buffer.from(data, "utf-8");
   return Buffer.isBuffer(data) ? data : Buffer.from(data);
@@ -59,37 +89,56 @@ export async function storagePut(
   data: Buffer | Uint8Array | string,
   contentType = "application/octet-stream",
 ): Promise<{ key: string; url: string }> {
-  const client = getClient();
   const key = appendHashSuffix(normalizeKey(relKey));
 
-  await client.send(
-    new PutObjectCommand({
-      Bucket: ENV.s3.bucket,
-      Key: key,
-      Body: toBody(data),
-      ContentType: contentType,
-    }),
-  );
+  if (ENV.storageBackend === "s3") {
+    const client = getS3Client();
+    await client.send(
+      new PutObjectCommand({
+        Bucket: ENV.s3.bucket,
+        Key: key,
+        Body: toBody(data),
+        ContentType: contentType,
+      }),
+    );
+  } else {
+    const bucket = getGcsBucket();
+    await bucket.file(key).save(toBody(data), {
+      contentType,
+      public: true,
+      resumable: false,
+    });
+  }
 
-  return { key, url: publicUrlFor(key) };
+  return { key, url: storagePublicUrlFor(key) };
 }
 
 export async function storageGet(relKey: string): Promise<{ key: string; url: string }> {
-  if (!isS3Configured()) {
+  if (!isStorageConfigured()) {
     throw new Error(
-      "Storage not configured: set S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY and S3_PUBLIC_URL",
+      "Storage not configured: set STORAGE_BACKEND=firebase with " +
+        "VITE_FIREBASE_STORAGE_BUCKET and FIREBASE_SERVICE_ACCOUNT_JSON, " +
+        "or STORAGE_BACKEND=s3 with the S3_* variables",
     );
   }
   const key = normalizeKey(relKey);
-  return { key, url: publicUrlFor(key) };
+  return { key, url: storagePublicUrlFor(key) };
 }
 
 export async function storageGetSignedUrl(relKey: string): Promise<string> {
-  const client = getClient();
   const key = normalizeKey(relKey);
-  return getSignedUrl(
-    client,
-    new GetObjectCommand({ Bucket: ENV.s3.bucket, Key: key }),
-    { expiresIn: 3600 },
-  );
+  if (ENV.storageBackend === "s3") {
+    const client = getS3Client();
+    return getSignedUrl(
+      client,
+      new GetObjectCommand({ Bucket: ENV.s3.bucket, Key: key }),
+      { expiresIn: 3600 },
+    );
+  }
+  const bucket = getGcsBucket();
+  const [url] = await bucket.file(key).getSignedUrl({
+    action: "read",
+    expires: Date.now() + 3600_000,
+  });
+  return url;
 }

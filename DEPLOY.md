@@ -3,7 +3,7 @@
 Two ways — pick one:
 
 - **A. FREE tier (₹0/month)** — Render (app) + TiDB Cloud (MySQL, free) +
-  Cloudflare R2 (files, free 10 GB) + Firebase (login, free).
+  Firebase (login + file storage, free, no card needed).
   Limits: Render's free server sleeps after ~15 min idle, so the first
   page load after idle takes ~1 minute. Perfect until paying customers come.
 - **B. Cheap VPS (~₹400/month)** — Hetzner/Contabo, always on, no limits.
@@ -20,10 +20,9 @@ Two ways — pick one:
 2. **Render** — https://render.com → sign up (free, no card needed).
 3. **Firebase** — https://console.firebase.google.com → create project →
    Add web app → copy the `firebaseConfig` values → Authentication →
-   enable **Google** sign-in.
-4. **Cloudflare R2** — https://dash.cloudflare.com → R2 → create bucket
-   (e.g. `rdx-uploads`) → create API token → note Account ID, keys,
-   and the bucket's public `r2.dev` URL (Bucket → Settings → Public access).
+   enable **Google** sign-in → Project settings → **Service accounts** →
+   **Generate new private key** (free, no card) → save the JSON file.
+   This key lets the server upload files to Firebase Storage (free 5 GB).
 
 ### 2. Deploy on Render
 1. Render Dashboard → **New → Blueprint** → upload/connect this project
@@ -31,7 +30,8 @@ Two ways — pick one:
 2. Fill every `sync: false` variable:
    - `DATABASE_URL` = TiDB connection string, `DB_SSL` stays `true`
    - Firebase values, `GOOGLE_ADMIN_EMAIL` (your email → auto-admin)
-   - R2 values (`S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com`)
+   - `FIREBASE_SERVICE_ACCOUNT_JSON` = the whole service-account JSON
+     you downloaded (paste it as-is; raw or base64 both work)
 3. Deploy. First boot runs DB migrations automatically.
 4. Copy the Render URL, e.g. `https://rdx-road-control.onrender.com`,
    and set it as `APP_BASE_URL` in Render → Environment (redeploys).
@@ -96,10 +96,11 @@ You must create these once in your own accounts:
      `storageBucket`) into `.env`.
    - Authentication → Sign-in method → enable **Google**.
    - Authentication → Settings → Authorized domains → add `erp.yourdomain.com`.
-2. **Cloudflare R2 (file storage, free 10 GB)** — https://dash.cloudflare.com → R2
-   - Create bucket (e.g. `rdx-uploads`), create API token, copy
-     Account ID → `S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com`.
-   - Bucket → Settings → allow Public access → copy the `r2.dev` URL → `S3_PUBLIC_URL`.
+2. **Firebase Storage (file storage, free 5 GB, no card)** —
+   Project settings → Service accounts → Generate new private key →
+   paste the JSON into `FIREBASE_SERVICE_ACCOUNT_JSON`.
+   (Alternative: set `STORAGE_BACKEND=s3` and use Cloudflare R2 / AWS S3
+   with the `S3_*` variables — R2 needs a card on file to activate.)
 
 ## 6. Fill `.env` and start
 
