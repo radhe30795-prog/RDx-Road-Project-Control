@@ -1,0 +1,1 @@
+ALTER TABLE `road_structures` ADD `photos` text;
