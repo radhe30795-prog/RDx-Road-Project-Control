@@ -696,6 +696,16 @@ export const appRouter = router({
       .query(async ({ input }) => {
         return db.getRaBillLines(input.billId);
       }),
+    getBillExportData: roleProcedure(COMMERCIAL_ROLES)
+      .input(z.object({
+        projectId: z.number(),
+        roadIds: z.array(z.number()).optional(),
+        periodFrom: z.string(),
+        periodTo: z.string(),
+      }))
+      .query(async ({ input }) => {
+        return db.getRaBillExportData(input);
+      }),
     generateFromBoq: roleProcedure(COMMERCIAL_ROLES)
       .input(z.object({
         billId: z.string(),
