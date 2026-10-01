@@ -185,6 +185,24 @@ export default function DailyProgressPage() {
   const [boqItemId, setBoqItemId] = useState<number | undefined>(undefined);
   const [materialId, setMaterialId] = useState<number | undefined>(undefined);
   const [materialConsumedQuantity, setMaterialConsumedQuantity] = useState("");
+  // Material Section — daily material statement
+  const [matReceivedQty, setMatReceivedQty] = useState("");
+  const [matChallanNo, setMatChallanNo] = useState("");
+  const [matSupplier, setMatSupplier] = useState("");
+  const [matWastageQty, setMatWastageQty] = useState("");
+  const [matStorageLocation, setMatStorageLocation] = useState("");
+  const [matIssuedFor, setMatIssuedFor] = useState("");
+  // Machine Section — equipment deployment log
+  const [machineAssetId, setMachineAssetId] = useState<number | undefined>(undefined);
+  const [machineWorkingHours, setMachineWorkingHours] = useState("");
+  const [machineIdleHours, setMachineIdleHours] = useState("");
+  const [machineIdleReason, setMachineIdleReason] = useState("");
+  const [hourMeterOpening, setHourMeterOpening] = useState("");
+  const [hourMeterClosing, setHourMeterClosing] = useState("");
+  const [fuelConsumed, setFuelConsumed] = useState("");
+  const [machineStatus, setMachineStatus] = useState<"Working" | "Breakdown" | "Maintenance" | "Idle">("Working");
+  const [machineOperator, setMachineOperator] = useState("");
+  const [machineLocation, setMachineLocation] = useState("");
   const [manpower, setManpower] = useState("");
   const [machinery, setMachinery] = useState("");
   const [weather, setWeather] = useState("Clear / Sunny");
@@ -208,6 +226,9 @@ export default function DailyProgressPage() {
   const activeProjectId = projects?.[0]?.id || 1;
   const { data: boqData } = trpc.boq.list.useQuery({ roadId });
   const { data: inventoryData } = trpc.inventory.list.useQuery();
+  const { data: machineryAssetsData } = trpc.machinery.assetsList.useQuery();
+  // assetsList returns joined { asset, road } rows — flatten to plain assets
+  const machineryAssets = (machineryAssetsData || []).map((row) => row.asset);
   const availableRoads = roads ?? cachedRoads;
   const availableActivities = activities ?? cachedActivities;
   const usingRoadCache = !roads && cachedRoads.length > 0;
@@ -239,6 +260,48 @@ export default function DailyProgressPage() {
 
   const sectionGuidance = SECTION_GUIDANCE[activeSectionTab];
 
+  // Section-specific form behaviour: work sections log quantities, Material logs a
+  // daily material statement, Machine logs an equipment deployment record.
+  const isWorkSection = activeSectionTab === "Highway Works" || activeSectionTab === "Concrete Works";
+  const isMaterialSection = activeSectionTab === "Material";
+  const isMachineSection = activeSectionTab === "Machine";
+
+  const selectedMaterial = inventoryData?.find((m) => m.id === materialId);
+  const matOpeningBalance = selectedMaterial ? parseFloat(String(selectedMaterial.balanceQuantity || 0)) : 0;
+  const matReceived = parseFloat(matReceivedQty) || 0;
+  const matConsumed = parseFloat(materialConsumedQuantity) || 0;
+  const matWastage = parseFloat(matWastageQty) || 0;
+  const matClosingBalance = matOpeningBalance + matReceived - matConsumed - matWastage;
+  const selectedAsset = machineryAssets.find((a) => a.id === machineAssetId);
+
+  const canSubmitDpr =
+    isMaterialSection
+      ? materialId !== undefined && (matReceivedQty.trim() !== "" || materialConsumedQuantity.trim() !== "")
+      : isMachineSection
+        ? machineAssetId !== undefined && machineWorkingHours.trim() !== ""
+        : actualQuantity.trim() !== "" && percentageComplete.trim() !== "";
+
+  const handleSectionTabChange = (tabId: typeof activeSectionTab) => {
+    setActiveSectionTab(tabId);
+    const isWork = tabId === "Highway Works" || tabId === "Concrete Works";
+    if (!isWork) {
+      // Material / Machine entries are standalone registers — unlink activity by default
+      setActivityId(0);
+    } else if (activityId === 0) {
+      const firstAct = availableActivities[0]?.activity?.id;
+      if (firstAct) setActivityId(firstAct);
+    }
+  };
+
+  const handleMachineAssetChange = (assetId: number | undefined) => {
+    setMachineAssetId(assetId);
+    const asset = machineryAssets.find((a) => a.id === assetId);
+    if (asset) {
+      setHourMeterOpening(String(asset.currentHourMeter || asset.openingHourMeter || "0"));
+      if (asset.operator) setMachineOperator(asset.operator);
+    }
+  };
+
   const resetDprForm = () => {
     setActiveSectionTab("Highway Works");
     setDate(new Date().toISOString().split("T")[0]);
@@ -253,6 +316,22 @@ export default function DailyProgressPage() {
     setBoqItemId(undefined);
     setMaterialId(undefined);
     setMaterialConsumedQuantity("");
+    setMatReceivedQty("");
+    setMatChallanNo("");
+    setMatSupplier("");
+    setMatWastageQty("");
+    setMatStorageLocation("");
+    setMatIssuedFor("");
+    setMachineAssetId(undefined);
+    setMachineWorkingHours("");
+    setMachineIdleHours("");
+    setMachineIdleReason("");
+    setHourMeterOpening("");
+    setHourMeterClosing("");
+    setFuelConsumed("");
+    setMachineStatus("Working");
+    setMachineOperator("");
+    setMachineLocation("");
     setManpower("");
     setMachinery("");
     setWeather("Clear / Sunny");
@@ -402,24 +481,46 @@ export default function DailyProgressPage() {
       date,
       projectId: activeProjectId,
       roadId,
-      activityId,
+      // Material / Machine entries are standalone registers — no activity linkage by default
+      activityId: activityId || undefined,
       sectionType: activeSectionTab,
-      chainageFrom: chainageFrom || undefined,
-      chainageTo: chainageTo || undefined,
-      boqItemId: boqItemId || undefined,
-      materialId: materialId || undefined,
-      materialConsumedQuantity: materialConsumedQuantity ? materialConsumedQuantity : undefined,
-      plannedQuantity,
-      actualQuantity,
-      billableQuantity: billableQuantity || actualQuantity,
+      // Work sections only: chainage, quantities, BOQ linkage, billing
+      chainageFrom: isWorkSection ? (chainageFrom || undefined) : undefined,
+      chainageTo: isWorkSection ? (chainageTo || undefined) : undefined,
+      boqItemId: isWorkSection ? (boqItemId || undefined) : undefined,
+      plannedQuantity: isWorkSection ? plannedQuantity : "0.00",
+      actualQuantity: isWorkSection ? actualQuantity : "0.00",
+      billableQuantity: isWorkSection ? (billableQuantity || actualQuantity || undefined) : undefined,
       billingStatus,
-      unit,
-      percentageComplete,
+      unit: isWorkSection ? unit : (isMaterialSection ? (selectedMaterial?.unit || "Nos") : "Nos"),
+      percentageComplete: isWorkSection ? percentageComplete : "0.00",
+      // Material section: daily material statement
+      materialId: materialId || undefined,
+      materialOpeningBalance: isMaterialSection && materialId ? matOpeningBalance.toFixed(3) : undefined,
+      materialConsumedQuantity: materialConsumedQuantity ? materialConsumedQuantity : undefined,
+      materialReceivedQuantity: isMaterialSection && matReceivedQty ? matReceivedQty : undefined,
+      materialChallanNo: isMaterialSection ? (matChallanNo.trim() || undefined) : undefined,
+      materialSupplier: isMaterialSection ? (matSupplier.trim() || undefined) : undefined,
+      materialWastageQuantity: isMaterialSection && matWastageQty ? matWastageQty : undefined,
+      materialStorageLocation: isMaterialSection ? (matStorageLocation.trim() || undefined) : undefined,
+      // Machine section: equipment deployment log
+      machineryAssetId: isMachineSection ? (machineAssetId || undefined) : undefined,
+      machineWorkingHours: isMachineSection ? (machineWorkingHours || undefined) : undefined,
+      machineIdleHours: isMachineSection ? (machineIdleHours || undefined) : undefined,
+      machineIdleReason: isMachineSection ? (machineIdleReason.trim() || undefined) : undefined,
+      hourMeterOpening: isMachineSection ? (hourMeterOpening || undefined) : undefined,
+      hourMeterClosing: isMachineSection ? (hourMeterClosing || undefined) : undefined,
+      fuelConsumed: isMachineSection ? (fuelConsumed || undefined) : undefined,
+      machineStatus: isMachineSection ? machineStatus : undefined,
+      machineOperator: isMachineSection ? (machineOperator.trim() || undefined) : undefined,
+      machineLocation: isMachineSection ? (machineLocation.trim() || undefined) : undefined,
       manpower,
-      machinery,
+      machinery: isWorkSection ? machinery : undefined,
       weather,
       hindrance,
-      remarks,
+      remarks: isMaterialSection && matIssuedFor.trim()
+        ? `${remarks.trim()}${remarks.trim() ? " | " : ""}Issued for: ${matIssuedFor.trim()}`
+        : remarks,
     };
 
     if (!isOnline) {
@@ -549,8 +650,24 @@ export default function DailyProgressPage() {
                 </div>
 
                 <div className="flex items-center justify-between bg-slate-50 p-2 rounded text-[11px]">
-                  <span>Executed: <strong>{draft.payload.actualQuantity} {draft.payload.unit}</strong></span>
-                  <span className="font-bold text-emerald-700">{draft.payload.percentageComplete}% Done</span>
+                  {draft.payload.sectionType === "Material" ? (
+                    <>
+                      <span>Material statement: <strong>
+                        {[draft.payload.materialReceivedQuantity && `+${draft.payload.materialReceivedQuantity}`, draft.payload.materialConsumedQuantity && `-${draft.payload.materialConsumedQuantity}`, draft.payload.materialWastageQuantity && `(w ${draft.payload.materialWastageQuantity})`].filter(Boolean).join(" ") || "—"} {draft.payload.unit}
+                      </strong></span>
+                      <span className="font-bold text-purple-700">Stock updated on sync</span>
+                    </>
+                  ) : draft.payload.sectionType === "Machine" ? (
+                    <>
+                      <span>Equipment log: <strong>{draft.payload.machineWorkingHours || "0"}h working</strong>{draft.payload.fuelConsumed ? ` • ${draft.payload.fuelConsumed} Ltr diesel` : ""}</span>
+                      <span className="font-bold text-amber-700">{draft.payload.machineStatus || "Working"}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Executed: <strong>{draft.payload.actualQuantity} {draft.payload.unit}</strong></span>
+                      <span className="font-bold text-emerald-700">{draft.payload.percentageComplete}% Done</span>
+                    </>
+                  )}
                 </div>
 
                 {draft.lastError && (
@@ -701,8 +818,15 @@ export default function DailyProgressPage() {
           </div>
         )}
 
-        {dprList?.map(({ dp, road, activity, boq, material }) => {
+        {dprList?.map(({ dp, road, activity, boq, material, asset }) => {
           const photos = parseSitePhotos(dp.sitePhotos);
+          const rowIsWork = dp.sectionType === "Highway Works" || dp.sectionType === "Concrete Works" || !dp.sectionType;
+          const rowIsMaterial = dp.sectionType === "Material";
+          const matOpen = parseFloat(String(dp.materialOpeningBalance || 0));
+          const matRecv = parseFloat(String(dp.materialReceivedQuantity || 0));
+          const matCons = parseFloat(String(dp.materialConsumedQuantity || 0));
+          const matWaste = parseFloat(String(dp.materialWastageQuantity || 0));
+          const matClose = matOpen + matRecv - matCons - matWaste;
           const sectionBadgeColor =
             dp.sectionType === "Concrete Works" ? "bg-blue-100 text-blue-900 border-blue-200" :
             dp.sectionType === "Material" ? "bg-purple-100 text-purple-900 border-purple-200" :
@@ -746,13 +870,24 @@ export default function DailyProgressPage() {
                     <CloudSun className="w-4 h-4 text-amber-500" />
                     <span>{dp.weather}</span>
                   </div>
-                  <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-bold">
-                    Activity: {dp.percentageComplete}% Done
-                  </span>
+                  {rowIsWork ? (
+                    <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-bold">
+                      Activity: {dp.percentageComplete}% Done
+                    </span>
+                  ) : rowIsMaterial ? (
+                    <span className="px-2 py-0.5 rounded bg-purple-100 text-purple-900 font-bold">
+                      Material Statement
+                    </span>
+                  ) : (
+                    <span className={`px-2 py-0.5 rounded font-bold ${dp.machineStatus === "Working" ? "bg-emerald-100 text-emerald-900" : dp.machineStatus === "Idle" ? "bg-slate-100 text-slate-700" : "bg-rose-100 text-rose-900"}`}>
+                      {dp.machineStatus || "Working"}
+                    </span>
+                  )}
                 </div>
               </div>
 
-              {/* Core Quantities and Work Info */}
+              {/* Core Quantities and Work Info — work sections */}
+              {rowIsWork && (
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-slate-50/70 p-3 rounded-lg text-xs">
                 <div className="col-span-2 sm:col-span-1">
                   <span className="text-slate-400 block text-[11px]">Construction Activity</span>
@@ -784,9 +919,66 @@ export default function DailyProgressPage() {
                   </span>
                 </div>
               </div>
+              )}
+
+              {/* Material Statement summary */}
+              {rowIsMaterial && (
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-purple-50/70 p-3 rounded-lg text-xs border border-purple-100">
+                <div className="col-span-2 sm:col-span-1">
+                  <span className="text-slate-400 block text-[11px]">Material</span>
+                  <span className="font-bold text-slate-800 line-clamp-1">{material?.materialName || "Material"}</span>
+                  <span className="text-[10px] text-slate-500 font-mono">{material?.materialCode}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[11px]">Opening Balance</span>
+                  <span className="font-bold text-slate-800">{dp.materialOpeningBalance || "—"} {dp.unit}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[11px]">Received Today</span>
+                  <span className="font-black text-emerald-600">+{matRecv} {dp.unit}</span>
+                  {dp.materialChallanNo && <span className="text-[10px] text-slate-500 block font-mono">Ch: {dp.materialChallanNo}</span>}
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[11px]">Consumed / Wastage</span>
+                  <span className="font-black text-blue-700">{matCons} {dp.unit}</span>
+                  {matWaste > 0 && <span className="text-[10px] text-rose-600 block">Wastage: {matWaste}</span>}
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[11px]">Closing Balance</span>
+                  <span className="font-black text-purple-700">{dp.materialOpeningBalance != null ? `${matClose.toLocaleString()} ${dp.unit}` : "—"}</span>
+                </div>
+              </div>
+              )}
+
+              {/* Machine deployment log summary */}
+              {dp.sectionType === "Machine" && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-amber-50/70 p-3 rounded-lg text-xs border border-amber-100">
+                <div className="col-span-2 sm:col-span-1">
+                  <span className="text-slate-400 block text-[11px]">Machine / Equipment</span>
+                  <span className="font-bold text-slate-800 line-clamp-1">{asset ? `${asset.assetNo} — ${asset.assetType}` : (dp.machinery || "Machine")}</span>
+                  {dp.machineLocation && <span className="text-[10px] text-slate-500 block">At: {dp.machineLocation}</span>}
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[11px]">Working / Idle Hours</span>
+                  <span className="font-black text-emerald-700">{dp.machineWorkingHours || "0"} h</span>
+                  {parseFloat(String(dp.machineIdleHours || 0)) > 0 && (
+                    <span className="text-[10px] text-slate-500 block">Idle: {dp.machineIdleHours}h{dp.machineIdleReason ? ` — ${dp.machineIdleReason}` : ""}</span>
+                  )}
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[11px]">Hour Meter</span>
+                  <span className="font-bold text-slate-800 font-mono">{dp.hourMeterOpening || "—"} → {dp.hourMeterClosing || "—"}</span>
+                  {dp.machineOperator && <span className="text-[10px] text-slate-500 block">Op: {dp.machineOperator}</span>}
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[11px]">Diesel Consumed</span>
+                  <span className="font-black text-orange-700">{dp.fuelConsumed || "0"} Ltr</span>
+                </div>
+              </div>
+              )}
 
               {/* ERP Linkage Badges */}
-              {(boq || material || dp.boqItemId || dp.materialId) && (
+              {(boq || material || asset || dp.boqItemId || dp.materialId || dp.machineryAssetId) && (
                 <div className="flex flex-wrap items-center gap-2 text-[11px] pt-1">
                   {boq && (
                     <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-semibold font-mono flex items-center gap-1">
@@ -794,10 +986,22 @@ export default function DailyProgressPage() {
                       <span>BOQ #{boq.itemCode}: {boq.chapter} (Bal: {parseFloat(String(boq.balanceQuantity)).toLocaleString()} {boq.unit})</span>
                     </span>
                   )}
-                  {material && dp.materialConsumedQuantity && (
+                  {material && (dp.materialConsumedQuantity || dp.materialReceivedQuantity) && (
                     <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-900 font-semibold flex items-center gap-1">
                       <Layers className="w-3 h-3 text-blue-700" />
-                      <span>{material.materialName}: Consumed {dp.materialConsumedQuantity} {dp.unit} (Stock: {parseFloat(String(material.balanceQuantity)).toLocaleString()})</span>
+                      <span>
+                        {material.materialName}:
+                        {matRecv > 0 && <> Received {matRecv} {dp.unit}</>}
+                        {matRecv > 0 && (matCons > 0 || matWaste > 0) && " • "}
+                        {matCons > 0 && <> Consumed {matCons} {dp.unit}</>}
+                        {matWaste > 0 && <> • Wastage {matWaste} {dp.unit}</>} (Stock: {parseFloat(String(material.balanceQuantity)).toLocaleString()})
+                      </span>
+                    </span>
+                  )}
+                  {asset && (
+                    <span className="px-2 py-0.5 rounded bg-orange-100 text-orange-900 font-semibold flex items-center gap-1">
+                      <Truck className="w-3 h-3 text-orange-700" />
+                      <span>{asset.assetNo} • {asset.assetType} — log posted, meter updated</span>
                     </span>
                   )}
                 </div>
@@ -823,7 +1027,7 @@ export default function DailyProgressPage() {
               )}
 
               {/* Manpower & Machinery details */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-600">
+              <div className={`grid grid-cols-1 ${rowIsWork ? "sm:grid-cols-2" : "sm:grid-cols-1"} gap-3 text-xs text-slate-600`}>
                 <div className="flex items-start gap-2 bg-white p-2.5 rounded border border-slate-100">
                   <Users className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
                   <div>
@@ -832,6 +1036,7 @@ export default function DailyProgressPage() {
                   </div>
                 </div>
 
+                {rowIsWork && (
                 <div className="flex items-start gap-2 bg-white p-2.5 rounded border border-slate-100">
                   <Truck className="w-4 h-4 text-purple-500 shrink-0 mt-0.5" />
                   <div>
@@ -839,6 +1044,18 @@ export default function DailyProgressPage() {
                     <span>{dp.machinery || "Not reported"}</span>
                   </div>
                 </div>
+                )}
+                {rowIsMaterial && (dp.materialSupplier || dp.materialChallanNo || dp.materialStorageLocation) && (
+                <div className="flex items-start gap-2 bg-white p-2.5 rounded border border-slate-100">
+                  <Receipt className="w-4 h-4 text-purple-500 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="text-slate-700 block text-[11px]">Receipt Details:</strong>
+                    <span>
+                      {[dp.materialSupplier && `Supplier: ${dp.materialSupplier}`, dp.materialChallanNo && `Challan: ${dp.materialChallanNo}`, dp.materialStorageLocation && `Stored at: ${dp.materialStorageLocation}`].filter(Boolean).join(" • ")}
+                    </span>
+                  </div>
+                </div>
+                )}
               </div>
 
               {/* Hindrance & Remarks */}
@@ -895,7 +1112,7 @@ export default function DailyProgressPage() {
                   <button
                     key={tab.id}
                     type="button"
-                    onClick={() => setActiveSectionTab(tab.id as any)}
+                    onClick={() => handleSectionTabChange(tab.id as any)}
                     className={`py-2 px-2 text-xs font-bold rounded-lg flex flex-col items-center gap-1 transition ${
                       isActive
                         ? "bg-slate-900 text-amber-300 shadow"
@@ -1023,12 +1240,15 @@ export default function DailyProgressPage() {
                 </div>
 
                 <div>
-                  <label className="block font-medium text-slate-700 mb-1">Activity Being Executed</label>
+                  <label className="block font-medium text-slate-700 mb-1">
+                    {isWorkSection ? "Activity Being Executed" : "Linked Activity (optional)"}
+                  </label>
                   <select
                     value={activityId}
                     onChange={(e) => setActivityId(parseInt(e.target.value))}
                     className="w-full p-2 border rounded"
                   >
+                    {!isWorkSection && <option value={0}>— General / Not linked —</option>}
                     {availableActivities.map(({ activity: a }) => (
                       <option key={a.id} value={a.id}>
                         {a.taskId} - {a.activityName} ({a.phase})
@@ -1038,7 +1258,8 @@ export default function DailyProgressPage() {
                 </div>
               </div>
 
-              {/* Chainage for BT / CC road split */}
+              {/* Chainage — work sections only (BT / CC road split) */}
+              {isWorkSection && (
               <div className="grid grid-cols-2 gap-2 p-2.5 bg-slate-50 rounded-lg border border-slate-200">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">Start Chainage (RD From)</label>
@@ -1061,8 +1282,11 @@ export default function DailyProgressPage() {
                   />
                 </div>
               </div>
+              )}
 
-              {/* Quantities & Billing Quantity */}
+              {/* Quantities & Billing Quantity — work sections only */}
+              {isWorkSection && (
+              <>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div>
                   <label className="block font-medium text-slate-700 mb-1">Planned Qty</label>
@@ -1137,8 +1361,11 @@ export default function DailyProgressPage() {
                   />
                 </div>
               </div>
+              </>
+              )}
 
-              {/* BOQ & Material Section Linkage */}
+              {/* BOQ & Material Section Linkage — work sections only */}
+              {isWorkSection && (
               <div className="p-3 bg-amber-50/70 rounded-lg border border-amber-200/80 space-y-2">
                 <span className="text-[11px] font-bold text-amber-950 uppercase tracking-wider block">
                   ERP Contract BOQ & Material Stock Auto-Deduction
@@ -1191,6 +1418,282 @@ export default function DailyProgressPage() {
                   </div>
                 )}
               </div>
+              )}
+
+              {/* ============ MATERIAL SECTION: Daily Material Statement ============ */}
+              {isMaterialSection && (
+                <div className="p-3 bg-purple-50/70 rounded-lg border border-purple-200 space-y-3">
+                  <span className="text-[11px] font-bold text-purple-950 uppercase tracking-wider block">
+                    Daily Material Statement — Receipt, Consumption & Stock
+                  </span>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Material *</label>
+                    <select
+                      value={materialId || ""}
+                      onChange={(e) => setMaterialId(e.target.value ? parseInt(e.target.value) : undefined)}
+                      className="w-full p-2 border rounded text-xs bg-white font-semibold"
+                    >
+                      <option value="">Select material...</option>
+                      {inventoryData?.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.materialCode} - {m.materialName} (Stock: {parseFloat(String(m.balanceQuantity)).toLocaleString()} {m.unit})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedMaterial && (
+                    <>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="bg-white rounded-lg border border-purple-100 p-2">
+                          <span className="text-[10px] text-slate-500 block">Opening Balance</span>
+                          <span className="font-mono font-black text-slate-800 text-sm">{matOpeningBalance.toLocaleString()} {selectedMaterial.unit}</span>
+                        </div>
+                        <div className="bg-white rounded-lg border border-purple-100 p-2">
+                          <span className="text-[10px] text-slate-500 block">Net Change Today</span>
+                          <span className={`font-mono font-black text-sm ${(matReceived - matConsumed - matWastage) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                            {(matReceived - matConsumed - matWastage) >= 0 ? "+" : ""}{(matReceived - matConsumed - matWastage).toLocaleString()} {selectedMaterial.unit}
+                          </span>
+                        </div>
+                        <div className="bg-purple-600 rounded-lg p-2">
+                          <span className="text-[10px] text-purple-200 block">Closing Balance</span>
+                          <span className="font-mono font-black text-white text-sm">{matClosingBalance.toLocaleString()} {selectedMaterial.unit}</span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Received Today ({selectedMaterial.unit})</label>
+                          <input
+                            type="number"
+                            step="0.001"
+                            value={matReceivedQty}
+                            onChange={(e) => setMatReceivedQty(e.target.value)}
+                            placeholder="e.g. 400"
+                            className="w-full p-2 border rounded text-xs bg-white font-mono font-bold text-emerald-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Challan / Invoice No.</label>
+                          <input
+                            type="text"
+                            value={matChallanNo}
+                            onChange={(e) => setMatChallanNo(e.target.value)}
+                            placeholder="e.g. CH-4821"
+                            className="w-full p-2 border rounded text-xs bg-white font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Supplier / Vehicle No.</label>
+                          <input
+                            type="text"
+                            value={matSupplier}
+                            onChange={(e) => setMatSupplier(e.target.value)}
+                            placeholder="e.g. Sharma Traders / CG10-AB-1234"
+                            className="w-full p-2 border rounded text-xs bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Consumed / Issued Today ({selectedMaterial.unit})</label>
+                          <input
+                            type="number"
+                            step="0.001"
+                            value={materialConsumedQuantity}
+                            onChange={(e) => setMaterialConsumedQuantity(e.target.value)}
+                            placeholder="e.g. 24.500"
+                            className="w-full p-2 border rounded text-xs bg-white font-mono font-bold text-blue-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Issued For (activity / chainage)</label>
+                          <input
+                            type="text"
+                            value={matIssuedFor}
+                            onChange={(e) => setMatIssuedFor(e.target.value)}
+                            placeholder="e.g. CC road panel, RD 2+000 to 2+500"
+                            className="w-full p-2 border rounded text-xs bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Wastage / Damage ({selectedMaterial.unit})</label>
+                          <input
+                            type="number"
+                            step="0.001"
+                            value={matWastageQty}
+                            onChange={(e) => setMatWastageQty(e.target.value)}
+                            placeholder="0"
+                            className="w-full p-2 border rounded text-xs bg-white font-mono font-bold text-rose-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Storage Location</label>
+                          <input
+                            type="text"
+                            value={matStorageLocation}
+                            onChange={(e) => setMatStorageLocation(e.target.value)}
+                            placeholder="e.g. Base camp stack yard"
+                            className="w-full p-2 border rounded text-xs bg-white"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-purple-800 bg-purple-100/70 rounded p-1.5">
+                        Receipt auto-creates a GRN and increases stock; consumption & wastage auto-deduct stock on submit.
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* ============ MACHINE SECTION: Equipment Deployment Log ============ */}
+              {isMachineSection && (
+                <div className="p-3 bg-amber-50/70 rounded-lg border border-amber-200 space-y-3">
+                  <span className="text-[11px] font-bold text-amber-950 uppercase tracking-wider block">
+                    Equipment Deployment Log — Hours, Fuel & Status
+                  </span>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Machine / Equipment *</label>
+                    <select
+                      value={machineAssetId || ""}
+                      onChange={(e) => handleMachineAssetChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                      className="w-full p-2 border rounded text-xs bg-white font-semibold"
+                    >
+                      <option value="">Select machine...</option>
+                      {machineryAssets.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.assetNo} - {a.assetType}{a.makeModel ? ` (${a.makeModel})` : ""} — {a.status}
+                        </option>
+                      ))}
+                    </select>
+                    {machineryAssets.length === 0 && (
+                      <p className="text-[10px] text-amber-800 mt-1">No machinery registered yet — add machines in the Machinery master first.</p>
+                    )}
+                  </div>
+
+                  {selectedAsset && (
+                    <>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Working Hours *</label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            value={machineWorkingHours}
+                            onChange={(e) => setMachineWorkingHours(e.target.value)}
+                            placeholder="e.g. 8"
+                            className="w-full p-2 border rounded text-xs bg-white font-mono font-bold text-emerald-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Idle Hours</label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            value={machineIdleHours}
+                            onChange={(e) => setMachineIdleHours(e.target.value)}
+                            placeholder="0"
+                            className="w-full p-2 border rounded text-xs bg-white font-mono"
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Idle Reason</label>
+                          <input
+                            type="text"
+                            value={machineIdleReason}
+                            onChange={(e) => setMachineIdleReason(e.target.value)}
+                            placeholder="e.g. Waiting for material, rain stoppage"
+                            className="w-full p-2 border rounded text-xs bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Hour Meter — Opening</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={hourMeterOpening}
+                            onChange={(e) => setHourMeterOpening(e.target.value)}
+                            className="w-full p-2 border rounded text-xs bg-white font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Hour Meter — Closing</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={hourMeterClosing}
+                            onChange={(e) => setHourMeterClosing(e.target.value)}
+                            placeholder="End of day reading"
+                            className="w-full p-2 border rounded text-xs bg-white font-mono font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Diesel Consumed (Ltr)</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            value={fuelConsumed}
+                            onChange={(e) => setFuelConsumed(e.target.value)}
+                            placeholder="e.g. 95"
+                            className="w-full p-2 border rounded text-xs bg-white font-mono font-bold text-orange-700"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Machine Status</label>
+                          <select
+                            value={machineStatus}
+                            onChange={(e) => setMachineStatus(e.target.value as any)}
+                            className="w-full p-2 border rounded text-xs bg-white font-semibold"
+                          >
+                            <option value="Working">Working</option>
+                            <option value="Idle">Idle (no work)</option>
+                            <option value="Breakdown">Breakdown</option>
+                            <option value="Maintenance">Maintenance</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Operator Name</label>
+                          <input
+                            type="text"
+                            value={machineOperator}
+                            onChange={(e) => setMachineOperator(e.target.value)}
+                            placeholder="Operator name"
+                            className="w-full p-2 border rounded text-xs bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Deployed At (chainage)</label>
+                          <input
+                            type="text"
+                            value={machineLocation}
+                            onChange={(e) => setMachineLocation(e.target.value)}
+                            placeholder="e.g. RD 3+500, Culvert site"
+                            className="w-full p-2 border rounded text-xs bg-white font-mono"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-amber-800 bg-amber-100/70 rounded p-1.5">
+                        Submit par machinery log banega, hour-meter update hoga aur fuel efficiency auto-calculate hogi.
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="block font-medium text-slate-700 mb-1">Manpower Deployed</label>
@@ -1203,6 +1706,7 @@ export default function DailyProgressPage() {
                 />
               </div>
 
+              {isWorkSection && (
               <div>
                 <label className="block font-medium text-slate-700 mb-1">Machinery & Plant Deployed</label>
                 <input
@@ -1213,6 +1717,7 @@ export default function DailyProgressPage() {
                   className="w-full p-2 border rounded"
                 />
               </div>
+              )}
 
               <div>
                 <label className="block font-medium text-slate-700 mb-1">Site Hindrances Encountered (if any)</label>
@@ -1244,7 +1749,7 @@ export default function DailyProgressPage() {
                 Cancel
               </button>
               <button
-                disabled={!actualQuantity || !percentageComplete || createDprMutation.isPending}
+                disabled={!canSubmitDpr || createDprMutation.isPending}
                 onClick={handleSubmitDpr}
                 className="px-4 py-1.5 bg-slate-900 text-white rounded text-xs font-semibold hover:bg-slate-800 disabled:opacity-50 flex items-center gap-1.5"
               >

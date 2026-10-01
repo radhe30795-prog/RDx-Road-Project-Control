@@ -227,15 +227,30 @@ export default function DateDprDetailModal({ isOpen, onClose, date, roadId }: Da
           ) : (
             <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white text-xs">
               {materialEntries.map(({ dp, material }) => (
-                <div key={dp.id} className="p-3.5 flex items-center justify-between">
-                  <div>
-                    <span className="font-bold text-slate-900 block">{material?.materialName || "Material Stock Issue"}</span>
-                    <span className="text-[10px] text-slate-500 font-mono">Code: {material?.materialCode || "N/A"}</span>
+                <div key={dp.id} className="p-3.5 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-slate-900 block">{material?.materialName || "Material Stock Issue"}</span>
+                      <span className="text-[10px] text-slate-500 font-mono">Code: {material?.materialCode || "N/A"}{dp.materialChallanNo ? ` • Challan: ${dp.materialChallanNo}` : ""}</span>
+                    </div>
+                    <div className="text-right text-[11px]">
+                      {parseFloat(String(dp.materialReceivedQuantity || 0)) > 0 && (
+                        <span className="font-bold text-emerald-700 block">+{dp.materialReceivedQuantity} {dp.unit} received</span>
+                      )}
+                      {parseFloat(String(dp.materialConsumedQuantity || 0)) > 0 && (
+                        <span className="font-bold text-blue-700 block">{dp.materialConsumedQuantity} {dp.unit} consumed</span>
+                      )}
+                      {parseFloat(String(dp.materialWastageQuantity || 0)) > 0 && (
+                        <span className="font-bold text-rose-600 block">{dp.materialWastageQuantity} {dp.unit} wastage</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="font-black text-purple-700 text-sm">{dp.actualQuantity} {dp.unit}</span>
-                    <span className="text-[10px] text-slate-400 block">Consumed on site</span>
-                  </div>
+                  {dp.materialOpeningBalance != null && (
+                    <p className="text-[10px] text-slate-500">
+                      Opening {dp.materialOpeningBalance} → Closing {(parseFloat(String(dp.materialOpeningBalance)) + parseFloat(String(dp.materialReceivedQuantity || 0)) - parseFloat(String(dp.materialConsumedQuantity || 0)) - parseFloat(String(dp.materialWastageQuantity || 0))).toFixed(3)} {dp.unit}
+                      {dp.materialSupplier ? ` • ${dp.materialSupplier}` : ""}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
@@ -257,13 +272,20 @@ export default function DateDprDetailModal({ isOpen, onClose, date, roadId }: Da
             <p className="text-xs text-slate-400 italic bg-slate-50 p-3 rounded-lg">No separate machinery records on this date.</p>
           ) : (
             <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white text-xs">
-              {machineEntries.map(({ dp, road }) => (
+              {machineEntries.map(({ dp, road, asset }) => (
                 <div key={dp.id} className="p-3.5 space-y-1">
                   <div className="flex justify-between items-center">
-                    <strong className="text-slate-900">{dp.machinery || "Plant & Machinery"}</strong>
-                    <span className="text-amber-800 font-mono font-bold">{dp.actualQuantity} {dp.unit}</span>
+                    <strong className="text-slate-900">{asset ? `${asset.assetNo} — ${asset.assetType}` : (dp.machinery || "Plant & Machinery")}</strong>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${dp.machineStatus === "Working" ? "bg-emerald-100 text-emerald-800" : dp.machineStatus === "Idle" ? "bg-slate-100 text-slate-600" : "bg-rose-100 text-rose-800"}`}>
+                      {dp.machineStatus || "Working"}
+                    </span>
                   </div>
-                  <p className="text-[11px] text-slate-500">Road: {road?.roadName} • Remarks: {dp.remarks || "No remarks"}</p>
+                  <p className="text-[11px] text-slate-500">
+                    {dp.machineWorkingHours ? <>Working <strong className="font-mono">{dp.machineWorkingHours}h</strong></> : null}
+                    {dp.fuelConsumed ? <> • Diesel <strong className="font-mono">{dp.fuelConsumed} Ltr</strong></> : null}
+                    {dp.hourMeterClosing ? <> • Meter <strong className="font-mono">{dp.hourMeterOpening || "—"} → {dp.hourMeterClosing}</strong></> : null}
+                  </p>
+                  <p className="text-[11px] text-slate-500">Road: {road?.roadName}{dp.machineLocation ? ` • At: ${dp.machineLocation}` : ""}{dp.machineOperator ? ` • Op: ${dp.machineOperator}` : ""} • Remarks: {dp.remarks || "No remarks"}</p>
                 </div>
               ))}
             </div>
