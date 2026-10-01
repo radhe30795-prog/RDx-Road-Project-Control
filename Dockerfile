@@ -44,7 +44,11 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 COPY package.json ./
-COPY patches ./patches
+# The wouter patch targets the client-side router, which the prebuilt server
+# bundle never loads. Strip pnpm.patchedDependencies here so the
+# production-only install cannot fail with ERR_PNPM_PATCH_NOT_APPLIED if the
+# resolved version ever drifts from the pinned patch.
+RUN node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));if(p.pnpm&&p.pnpm.patchedDependencies)delete p.pnpm.patchedDependencies;fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
 RUN pnpm install --prod --no-frozen-lockfile
 
 # Server bundle (dist/index.js) + migration runner (dist/migrate.js) + built client (dist/public)
