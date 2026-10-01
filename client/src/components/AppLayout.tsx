@@ -41,6 +41,7 @@ import { trpc } from "../lib/trpc";
 import { useAuth } from "../_core/hooks/useAuth";
 import { startLogin } from "../const";
 import { MobileInstallBanner } from "./MobileInstallBanner";
+import { canAccessPage } from "@shared/roles";
 
 // Role Context for dynamic switching and testing
 export type UserRole = "user" | "admin" | "project_manager" | "qs_billing_engineer" | "site_engineer" | "qa_qc_engineer" | "hr_payroll_manager";
@@ -116,6 +117,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     { href: "/documents", label: "Document Repository", icon: FolderOpen },
     { href: "/mobile-field", label: "📱 Mobile Field Companion", icon: Smartphone, highlight: true },
   ];
+
+  // RBAC: show only the modules this role may open
+  const visibleNavItems = navItems.filter((item) => canAccessPage(role, item.href));
 
   return (
     <RoleContext.Provider value={{ role, setRole: () => {}, roleLabel: activeRoleObj.label }}>
@@ -274,7 +278,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
                 Core Control Modules
               </div>
-              {navItems.map((item) => {
+              {visibleNavItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location === item.href;
                 return (
@@ -351,7 +355,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     </button>
                   </div>
                   <div className="space-y-1 pt-2">
-                    {navItems.map((item) => {
+                    {visibleNavItems.map((item) => {
                       const Icon = item.icon;
                       const isActive = location === item.href;
                       return (

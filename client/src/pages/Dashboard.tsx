@@ -36,6 +36,7 @@ import {
   Target,
   Route as RouteIcon,
   Search,
+  ShieldCheck,
 } from "lucide-react";
 import { useRole } from "../components/AppLayout";
 
@@ -195,6 +196,15 @@ export default function Dashboard() {
         <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-indigo-600/20 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-32 -left-16 h-72 w-72 rounded-full bg-amber-500/10 blur-3xl" />
         <div className="relative p-5 sm:p-7">
+          {role === "user" && (
+            <div className="mb-5 rounded-2xl border border-amber-400/40 bg-amber-500/10 p-4 flex items-start gap-3">
+              <ShieldCheck className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-sm text-amber-200">
+                <b className="font-bold">Role abhi assign nahi hua hai.</b> Modules aapke role ke
+                hisaab se khulenge. Apne <b>Admin</b> se Team &amp; Roles me apna role assign karwayein.
+              </div>
+            </div>
+          )}
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">

@@ -8,6 +8,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { AppLayout } from "./components/AppLayout";
 import { useAuth } from "./_core/hooks/useAuth";
 import { startLogin } from "./const";
+import { canAccessPage, ROLE_LABELS } from "@shared/roles";
 
 // Feature Pages
 import Dashboard from "./pages/Dashboard";
@@ -36,34 +37,74 @@ import AdminEditPanelPage from "./pages/AdminEditPanelPage";
 import HrPayrollPage from "./pages/HrPayrollPage";
 import NotFound from "./pages/NotFound";
 
+function AccessDenied({ path }: { path: string }) {
+  const { user } = useAuth();
+  const role = (user?.role || "user") as keyof typeof ROLE_LABELS;
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center p-6">
+      <div className="max-w-md w-full rounded-2xl border border-rose-200 bg-rose-50 p-8 text-center shadow-sm">
+        <div className="mx-auto w-14 h-14 rounded-2xl bg-rose-600 text-white flex items-center justify-center">
+          <ShieldCheck className="w-7 h-7" />
+        </div>
+        <h2 className="mt-4 text-xl font-black text-rose-950">Access Denied</h2>
+        <p className="mt-2 text-sm text-rose-900/80 leading-6">
+          Aapke role <b>({ROLE_LABELS[role] || role})</b> ko <b>{path}</b> module kholne ki permission nahi hai.
+          <br />Role change ke liye apne Admin se sampark karein.
+        </p>
+        <a href="/" className="mt-5 inline-block rounded-xl bg-slate-900 text-white px-5 py-2.5 text-sm font-bold hover:bg-slate-700">
+          Dashboard par wapas jayein
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function GuardedRoute({ path, component: Component }: { path: string; component: React.ComponentType<any> }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  const role = user?.role || "user";
+  if (!canAccessPage(role, path)) {
+    return (
+      <Route path={path}>
+        <AccessDenied path={path} />
+      </Route>
+    );
+  }
+  return (
+    <Route path={path}>
+      <Component />
+    </Route>
+  );
+}
+
 function Router() {
   return (
     <AppLayout>
       <Switch>
-        <Route path="/my-apps" component={MyAppsPage} />
-        <Route path="/team" component={TeamAdminPage} />
-        <Route path="/import" component={ImportCenterPage} />
-        <Route path="/admin-edit" component={AdminEditPanelPage} />
-        <Route path="/hr" component={HrPayrollPage} />
-        <Route path="/" component={Dashboard} />
-        <Route path="/roads" component={RoadsPage} />
-        <Route path="/structures" component={RoadStructuresPage} />
-        <Route path="/activities" component={ActivitiesPage} />
-        <Route path="/boq" component={BoqPage} />
-        <Route path="/emb" component={EmbPage} />
-        <Route path="/daily-progress" component={DailyProgressPage} />
-        <Route path="/inventory" component={InventoryPage} />
-        <Route path="/material-variance" component={MaterialVariancePage} />
-        <Route path="/subcontractors" component={SubcontractorPage} />
-        <Route path="/machinery" component={MachineryPage} />
-        <Route path="/signoffs" component={SignoffPage} />
-        <Route path="/reports" component={ReportsPage} />
-        <Route path="/billing" component={BillingPage} />
-        <Route path="/hindrances" component={HindrancePage} />
-        <Route path="/qa-qc" component={QaQcPage} />
-        <Route path="/materials" component={MaterialsPage} />
-        <Route path="/documents" component={DocumentsPage} />
-        <Route path="/mobile-field" component={MobileFieldCompanion} />
+        <GuardedRoute path="/my-apps" component={MyAppsPage} />
+        <GuardedRoute path="/team" component={TeamAdminPage} />
+        <GuardedRoute path="/import" component={ImportCenterPage} />
+        <GuardedRoute path="/admin-edit" component={AdminEditPanelPage} />
+        <GuardedRoute path="/hr" component={HrPayrollPage} />
+        <GuardedRoute path="/" component={Dashboard} />
+        <GuardedRoute path="/roads" component={RoadsPage} />
+        <GuardedRoute path="/structures" component={RoadStructuresPage} />
+        <GuardedRoute path="/activities" component={ActivitiesPage} />
+        <GuardedRoute path="/boq" component={BoqPage} />
+        <GuardedRoute path="/emb" component={EmbPage} />
+        <GuardedRoute path="/daily-progress" component={DailyProgressPage} />
+        <GuardedRoute path="/inventory" component={InventoryPage} />
+        <GuardedRoute path="/material-variance" component={MaterialVariancePage} />
+        <GuardedRoute path="/subcontractors" component={SubcontractorPage} />
+        <GuardedRoute path="/machinery" component={MachineryPage} />
+        <GuardedRoute path="/signoffs" component={SignoffPage} />
+        <GuardedRoute path="/reports" component={ReportsPage} />
+        <GuardedRoute path="/billing" component={BillingPage} />
+        <GuardedRoute path="/hindrances" component={HindrancePage} />
+        <GuardedRoute path="/qa-qc" component={QaQcPage} />
+        <GuardedRoute path="/materials" component={MaterialsPage} />
+        <GuardedRoute path="/documents" component={DocumentsPage} />
+        <GuardedRoute path="/mobile-field" component={MobileFieldCompanion} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>
