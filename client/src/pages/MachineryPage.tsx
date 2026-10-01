@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { trpc } from "../lib/trpc";
 import {
   Truck,
@@ -12,7 +12,10 @@ import {
   AlertTriangle,
   RotateCcw,
   Sparkles,
-  Zap
+  Zap,
+  ShieldCheck,
+  CalendarClock,
+  Wrench
 } from "lucide-react";
 import { toast } from "sonner";
 import { useRole } from "../components/AppLayout";
@@ -23,6 +26,20 @@ export default function MachineryPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
+  const [isComplianceModalOpen, setIsComplianceModalOpen] = useState(false);
+
+  // Compliance form
+  const [compAssetId, setCompAssetId] = useState<string>("");
+  const [compDocType, setCompDocType] = useState("PUC");
+  const [compDocNo, setCompDocNo] = useState("");
+  const [compIssueDate, setCompIssueDate] = useState(new Date().toISOString().split("T")[0]);
+  const [compExpiryDate, setCompExpiryDate] = useState("");
+  const [compAmount, setCompAmount] = useState("");
+  const [compVendor, setCompVendor] = useState("");
+  const [compMeter, setCompMeter] = useState("");
+  const [compRemarks, setCompRemarks] = useState("");
+
+  const COMPLIANCE_DOC_TYPES = ["Registration", "PUC", "Road Tax", "Insurance", "Fitness", "Permit", "Service", "Other"];
 
   // New Asset Form
   const [assetNo, setAssetNo] = useState("");
@@ -55,6 +72,66 @@ export default function MachineryPage() {
 
   const createAssetMutation = trpc.machinery.createAsset.useMutation();
   const createLogMutation = trpc.machinery.createLog.useMutation();
+  const createComplianceMutation = trpc.machinery.createCompliance.useMutation();
+  const deleteComplianceMutation = trpc.machinery.deleteCompliance.useMutation();
+  const alertsMutation = trpc.machinery.generateComplianceAlerts.useMutation();
+
+  const { data: complianceRows, refetch: refetchCompliance } = trpc.machinery.complianceList.useQuery();
+
+  // Generate due-date alerts once when the page loads (server dedupes, no spam)
+  useEffect(() => {
+    alertsMutation.mutate({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Compliance rows with computed due status, most urgent first
+  const complianceWithStatus = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return (complianceRows || [])
+      .map(({ compliance, asset }) => {
+        const expiry = new Date(`${compliance.expiryDate || ""}T00:00:00`);
+        const daysLeft = isNaN(expiry.getTime())
+          ? null
+          : Math.ceil((expiry.getTime() - today.getTime()) / 86400000);
+        const status = daysLeft === null ? "Unknown" : daysLeft < 0 ? "Overdue" : daysLeft <= 30 ? "Due Soon" : "Valid";
+        return { compliance, asset, daysLeft, status };
+      })
+      .sort((a, b) => (a.daysLeft ?? 99999) - (b.daysLeft ?? 99999));
+  }, [complianceRows]);
+
+  const overdueCount = complianceWithStatus.filter((c) => c.status === "Overdue").length;
+  const dueSoonCount = complianceWithStatus.filter((c) => c.status === "Due Soon").length;
+
+  const handleCreateCompliance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!compAssetId || !compExpiryDate) {
+      toast.error("Machine aur Expiry / Next-due date zaroori hai");
+      return;
+    }
+    try {
+      await createComplianceMutation.mutateAsync({
+        assetId: parseInt(compAssetId),
+        projectId: activeProjectId,
+        docType: compDocType as "Registration" | "PUC" | "Road Tax" | "Insurance" | "Fitness" | "Permit" | "Service" | "Other",
+        docNumber: compDocNo.trim() || undefined,
+        issueDate: compIssueDate || undefined,
+        expiryDate: compExpiryDate,
+        amount: compAmount.trim() || undefined,
+        vendor: compVendor.trim() || undefined,
+        meterReading: compDocType === "Service" && compMeter.trim() ? compMeter.trim() : undefined,
+        remarks: compRemarks.trim() || undefined,
+      });
+      toast.success(`${compDocType} record saved — due alerts ON`);
+      setIsComplianceModalOpen(false);
+      setCompDocNo(""); setCompExpiryDate(""); setCompAmount("");
+      setCompVendor(""); setCompMeter(""); setCompRemarks("");
+      refetchCompliance();
+      alertsMutation.mutate({});
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save compliance record");
+    }
+  };
 
   const handleCreateAsset = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -195,6 +272,121 @@ export default function MachineryPage() {
             {stats.avgEfficiency} L/hr
           </span>
           <span className="text-[10px] text-slate-500 mt-0.5 block">Efficiency benchmark</span>
+        </div>
+      </div>
+
+      {/* Machine Compliance & Service Tracker */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-indigo-500" />
+              <h2 className="font-bold text-slate-900 text-sm sm:text-base">Machine Compliance & Service Tracker</h2>
+            </div>
+            <p className="text-[11px] text-slate-500 mt-1">
+              Registration, PUC, Tax, Insurance, Fitness, Permit aur servicing — expiry par auto alert (top bell me bhi aayega).
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {overdueCount > 0 && (
+              <span className="px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 text-[11px] font-bold flex items-center gap-1">
+                <AlertTriangle className="w-3.5 h-3.5" /> {overdueCount} Overdue
+              </span>
+            )}
+            {dueSoonCount > 0 && (
+              <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 text-[11px] font-bold flex items-center gap-1">
+                <CalendarClock className="w-3.5 h-3.5" /> {dueSoonCount} Due in 30 days
+              </span>
+            )}
+            {overdueCount === 0 && dueSoonCount === 0 && (
+              <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> All Valid
+              </span>
+            )}
+            <button
+              onClick={() => setIsComplianceModalOpen(true)}
+              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm"
+            >
+              <Plus className="w-4 h-4" /> Add Document
+            </button>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="bg-slate-50 text-slate-500 uppercase text-[10px]">
+                <th className="p-3">Machine</th>
+                <th className="p-3">Document</th>
+                <th className="p-3">Doc No.</th>
+                <th className="p-3">Issue Date</th>
+                <th className="p-3">Expiry / Next Due</th>
+                <th className="p-3 text-center">Days Left</th>
+                <th className="p-3 text-center">Status</th>
+                <th className="p-3">Vendor / Amount</th>
+                <th className="p-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {complianceWithStatus.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="p-6 text-center text-slate-400 text-xs">
+                    No compliance records yet — har machine ke liye PUC, Insurance, Tax, Servicing add karo.
+                  </td>
+                </tr>
+              ) : (
+                complianceWithStatus.map(({ compliance: c, asset, daysLeft, status }) => (
+                  <tr key={c.id} className="border-t border-slate-100 hover:bg-slate-50">
+                    <td className="p-3">
+                      <span className="font-bold text-slate-900 block">{asset?.assetNo || `Machine #${c.assetId}`}</span>
+                      <span className="text-[10px] text-slate-500">{asset?.assetType || ""}</span>
+                    </td>
+                    <td className="p-3">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${c.docType === "Service" ? "bg-blue-100 text-blue-800" : "bg-slate-100 text-slate-700"}`}>
+                        {c.docType}
+                      </span>
+                      {c.docType === "Service" && c.meterReading ? (
+                        <span className="text-[10px] text-slate-500 block mt-0.5 font-mono">@ {c.meterReading} hrs</span>
+                      ) : null}
+                    </td>
+                    <td className="p-3 font-mono text-[11px]">{c.docNumber || "—"}</td>
+                    <td className="p-3 font-mono text-[11px]">{c.issueDate || "—"}</td>
+                    <td className="p-3 font-mono text-[11px] font-bold">{c.expiryDate}</td>
+                    <td className="p-3 text-center font-mono font-bold text-[11px]">
+                      {daysLeft === null ? "—" : daysLeft < 0 ? `${Math.abs(daysLeft)} overdue` : daysLeft}
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        status === "Overdue" ? "bg-rose-100 text-rose-800"
+                        : status === "Due Soon" ? "bg-amber-100 text-amber-800"
+                        : "bg-emerald-100 text-emerald-800"
+                      }`}>
+                        {status}
+                      </span>
+                    </td>
+                    <td className="p-3 text-[11px] text-slate-600">
+                      {c.vendor || "—"}
+                      {parseFloat(String(c.amount || 0)) > 0 ? (
+                        <span className="block font-mono font-bold">₹{c.amount}</span>
+                      ) : null}
+                    </td>
+                    <td className="p-3">
+                      <button
+                        onClick={async () => {
+                          if (confirm("Delete this compliance record?")) {
+                            await deleteComplianceMutation.mutateAsync({ id: c.id });
+                            refetchCompliance();
+                          }
+                        }}
+                        className="text-rose-500 hover:text-rose-700 text-[11px] font-bold"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -614,6 +806,159 @@ export default function MachineryPage() {
                   className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold shadow"
                 >
                   Record Log & Audit Fuel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Compliance Document / Service */}
+      {isComplianceModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl my-8">
+            <div className="flex items-center gap-2 mb-1">
+              <ShieldCheck className="w-5 h-5 text-indigo-600" />
+              <h3 className="text-lg font-extrabold text-slate-900">Add Compliance Document / Service</h3>
+            </div>
+            <p className="text-[11px] text-slate-500 mb-4">Expiry / next-due date par auto alert milega (30 din pehle se, bell me bhi).</p>
+            <form onSubmit={handleCreateCompliance} className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700">Machine *</label>
+                <select
+                  value={compAssetId}
+                  onChange={(e) => setCompAssetId(e.target.value)}
+                  className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50"
+                  required
+                >
+                  <option value="">— Select machine —</option>
+                  {(assets || []).map(({ asset: a }) => (
+                    <option key={a.id} value={a.id}>
+                      {a.assetNo} — {a.assetType}{a.registrationNo ? ` (${a.registrationNo})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700">Document Type *</label>
+                  <select
+                    value={compDocType}
+                    onChange={(e) => setCompDocType(e.target.value)}
+                    className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50"
+                  >
+                    {COMPLIANCE_DOC_TYPES.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700">Doc / Policy / Cert No.</label>
+                  <input
+                    type="text"
+                    value={compDocNo}
+                    onChange={(e) => setCompDocNo(e.target.value)}
+                    placeholder="e.g. PUC-2026-8891"
+                    className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700">
+                    {compDocType === "Service" ? "Service Date" : "Issue Date"}
+                  </label>
+                  <input
+                    type="date"
+                    value={compIssueDate}
+                    onChange={(e) => setCompIssueDate(e.target.value)}
+                    className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 text-rose-700">
+                    {compDocType === "Service" ? "Next Service Due Date *" : "Expiry Date *"}
+                  </label>
+                  <input
+                    type="date"
+                    value={compExpiryDate}
+                    onChange={(e) => setCompExpiryDate(e.target.value)}
+                    className="mt-1 w-full p-2.5 border border-rose-200 rounded-lg bg-rose-50/50 font-bold"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700">
+                    {compDocType === "Service" ? "Workshop / Service Center" : "Vendor / Insurer / RTO Agent"}
+                  </label>
+                  <input
+                    type="text"
+                    value={compVendor}
+                    onChange={(e) => setCompVendor(e.target.value)}
+                    placeholder="e.g. Sharma Motors, Ambikapur"
+                    className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700">Amount (₹)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={compAmount}
+                    onChange={(e) => setCompAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-mono"
+                  />
+                </div>
+              </div>
+
+              {compDocType === "Service" && (
+                <div>
+                  <label className="font-bold text-slate-700 flex items-center gap-1">
+                    <Wrench className="w-3.5 h-3.5" /> Hour-Meter at Service
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={compMeter}
+                    onChange={(e) => setCompMeter(e.target.value)}
+                    placeholder="e.g. 2450.50"
+                    className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-mono"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="font-bold text-slate-700">Remarks</label>
+                <input
+                  type="text"
+                  value={compRemarks}
+                  onChange={(e) => setCompRemarks(e.target.value)}
+                  placeholder="Anything to remember at renewal..."
+                  className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsComplianceModalOpen(false)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg text-slate-600 font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createComplianceMutation.isPending}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow"
+                >
+                  Save & Enable Alerts
                 </button>
               </div>
             </form>
