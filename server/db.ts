@@ -2611,3 +2611,175 @@ export async function updateHrGroupSettlementStatus(id: number, status: "Approve
     updatedAt: new Date(),
   }).where(eq(hrGroupSettlements.id, id));
 }
+
+/**
+ * Get RA bill export data in the user's Excel measurement-sheet format.
+ * Returns per-road: items with detailed measurements, split into Previous (before periodFrom)
+ * and Current (within period), plus Up-to-date totals.
+ */
+export async function getRaBillExportData(params: {
+  projectId: number;
+  roadIds?: number[];
+  periodFrom: string; // YYYY-MM-DD
+  periodTo: string;   // YYYY-MM-DD
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+
+  // Get roads
+  const roadCond = params.roadIds && params.roadIds.length > 0
+    ? and(eq(roads.projectId, params.projectId), sql`${roads.id} IN (${sql.join(params.roadIds.map(id => sql`${id}`), sql`, `)})`)
+    : eq(roads.projectId, params.projectId);
+  const roadRows = await db.select().from(roads).where(roadCond).orderBy(roads.id);
+
+  const result: Array<{
+    roadId: number;
+    roadCode: string;
+    roadName: string;
+    items: Array<{
+      boqItemId: number;
+      itemCode: string;
+      sor: string;
+      description: string;
+      unit: string;
+      rate: number;
+      measurements: Array<{
+        mbNo: string;
+        location: string;
+        nos: number | null;
+        length: number | null;
+        width: number | null;
+        depth: number | null;
+        quantity: number;
+      }>;
+      previousQty: number;
+      currentQty: number;
+      uptoQty: number;
+      previousAmt: number;
+      currentAmt: number;
+      uptoAmt: number;
+    }>;
+    roadTotal: { previousAmt: number; currentAmt: number; uptoAmt: number };
+  }> = [];
+
+  for (const road of roadRows) {
+    // Get all approved e-MB entries for this road
+    const entries = await db.select({
+      entry: measurementEntries,
+      boq: boqItems,
+    }).from(measurementEntries)
+      .leftJoin(boqItems, eq(measurementEntries.boqItemId, boqItems.id))
+      .where(and(
+        eq(measurementEntries.roadId, road.id),
+        eq(measurementEntries.status, "Approved")
+      ))
+      .orderBy(measurementEntries.mbDate, measurementEntries.id);
+
+    // Group by BOQ item
+    const byItem = new Map<number, {
+      boq: typeof boqItems.$inferSelect;
+      prevMeasurements: typeof entries;
+      currMeasurements: typeof entries;
+    }>();
+
+    for (const { entry, boq } of entries) {
+      if (!boq) continue;
+      const isCurrent = entry.mbDate >= params.periodFrom && entry.mbDate <= params.periodTo;
+      const isPrevious = entry.mbDate < params.periodFrom;
+      if (!isCurrent && !isPrevious) continue; // after periodTo, skip
+
+      if (!byItem.has(boq.id)) {
+        byItem.set(boq.id, { boq, prevMeasurements: [], currMeasurements: [] });
+      }
+      const g = byItem.get(boq.id)!;
+      if (isCurrent) g.currMeasurements.push({ entry, boq } as any);
+      else g.prevMeasurements.push({ entry, boq } as any);
+    }
+
+    const items: typeof result[0]["items"] = [];
+    let roadPrev = 0, roadCurr = 0, roadUpto = 0;
+
+    for (const [boqId, g] of Array.from(byItem.entries())) {
+      const rate = parseFloat(String(g.boq.rate || "0"));
+      const prevQty = g.prevMeasurements.reduce((s: number, r: any) => s + parseFloat(String(r.entry.calculatedQuantity || "0")), 0);
+      const currQty = g.currMeasurements.reduce((s: number, r: any) => s + parseFloat(String(r.entry.calculatedQuantity || "0")), 0);
+      const uptoQty = prevQty + currQty;
+
+      if (uptoQty <= 0) continue;
+
+      const prevAmt = parseFloat((prevQty * rate).toFixed(2));
+      const currAmt = parseFloat((currQty * rate).toFixed(2));
+      const uptoAmt = parseFloat((uptoQty * rate).toFixed(2));
+
+      roadPrev += prevAmt;
+      roadCurr += currAmt;
+      roadUpto += uptoAmt;
+
+      // Detailed measurements for the CURRENT bill (these go on the measurement sheet)
+      const measurements = g.currMeasurements.map((r: any) => {
+        const e = r.entry;
+        // NOS: derive from qty / (L*W*D) if possible, else null
+        const l = parseFloat(String(e.length || "0"));
+        const w = parseFloat(String(e.width || "0"));
+        const d = parseFloat(String(e.depth || "0"));
+        const q = parseFloat(String(e.calculatedQuantity || "0"));
+        let nos: number | null = null;
+        const lwd = l * w * d;
+        if (lwd > 0 && q > 0) {
+          const n = q / lwd;
+          // Only use if it's close to an integer (else the qty was entered directly)
+          if (Math.abs(n - Math.round(n)) < 0.01) nos = Math.round(n);
+        }
+        return {
+          mbNo: e.mbNo,
+          location: e.locationFrom || "",
+          nos,
+          length: l > 0 ? l : null,
+          width: w > 0 ? w : null,
+          depth: d > 0 ? d : null,
+          quantity: q,
+        };
+      });
+
+      // Extract SOR from itemCode (format: ROADCODE-SOR)
+      const itemCode = g.boq.itemCode || "";
+      const sor = itemCode.includes("-") ? itemCode.split("-").slice(1).join("-") : itemCode;
+
+      items.push({
+        boqItemId: boqId,
+        itemCode,
+        sor,
+        description: g.boq.description || "",
+        unit: g.boq.unit || "",
+        rate,
+        measurements,
+        previousQty: parseFloat(prevQty.toFixed(3)),
+        currentQty: parseFloat(currQty.toFixed(3)),
+        uptoQty: parseFloat(uptoQty.toFixed(3)),
+        previousAmt: prevAmt,
+        currentAmt: currAmt,
+        uptoAmt: uptoAmt,
+      });
+    }
+
+    // Sort items by SOR for consistent output
+    items.sort((a, b) => a.sor.localeCompare(b.sor, undefined, { numeric: true }));
+
+    if (items.length > 0) {
+      result.push({
+        roadId: road.id,
+        roadCode: road.roadId,
+        roadName: road.roadName,
+        items,
+        roadTotal: {
+          previousAmt: parseFloat(roadPrev.toFixed(2)),
+          currentAmt: parseFloat(roadCurr.toFixed(2)),
+          uptoAmt: parseFloat(roadUpto.toFixed(2)),
+        },
+      });
+    }
+  }
+
+  return result;
+}
+
