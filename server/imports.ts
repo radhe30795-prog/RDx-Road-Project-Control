@@ -335,12 +335,13 @@ async function importRow(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, she
       required(row, ["entityType", "entityId", "stage", "requestedBy", "assignedRole"]);
       await db.insert(approvalSignoffs).values({ entityType: text(row, "entityType"), entityId: text(row, "entityId"), stage: text(row, "stage"), requestedBy: text(row, "requestedBy"), assignedRole: text(row, "assignedRole"), signedBy: optional(row, "signedBy"), status: (text(row, "status") || "Pending") as any, comments: optional(row, "comments"), signedAt: optional(row, "signedAt") as any });
       return;
-    case "Structures":
+    case "Structures": {
       required(row, ["structureNo", "projectId", "roadId", "structureType", "chainageFrom"]);
       // Upsert on structureNo: re-importing corrects quantities without creating duplicates.
       // status / billableQuantity are intentionally NOT overwritten (user progress is preserved).
-      await db.insert(roadStructures).values({
-        structureNo: text(row, "structureNo"),
+      const sno = text(row, "structureNo");
+      const existing = await db.select({ id: roadStructures.id }).from(roadStructures).where(eq(roadStructures.structureNo, sno)).limit(1);
+      const measurement = {
         projectId: resolve(refs.projects, row, "projectId"),
         roadId: resolve(refs.roads, row, "roadId"),
         structureType: text(row, "structureType") as any,
@@ -353,27 +354,20 @@ async function importRow(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, she
         height: optional(row, "height"),
         quantity: numberText(row, "quantity", "1.000"),
         unit: text(row, "unit") || "Nos",
-        status: (text(row, "status") || "Not Started") as any,
-        billableQuantity: numberText(row, "billableQuantity", "0.000"),
         remarks: optional(row, "remarks"),
-      }).onDuplicateKeyUpdate({
-        set: {
-          projectId: resolve(refs.projects, row, "projectId"),
-          roadId: resolve(refs.roads, row, "roadId"),
-          structureType: text(row, "structureType") as any,
-          chainageFrom: text(row, "chainageFrom"),
-          chainageTo: optional(row, "chainageTo"),
-          locationDescription: optional(row, "locationDescription"),
-          count: numberText(row, "count", "1.00"),
-          length: optional(row, "length"),
-          width: optional(row, "width"),
-          height: optional(row, "height"),
-          quantity: numberText(row, "quantity", "1.000"),
-          unit: text(row, "unit") || "Nos",
-          remarks: optional(row, "remarks"),
-        },
-      });
+      };
+      if (existing.length > 0) {
+        await db.update(roadStructures).set(measurement).where(eq(roadStructures.id, existing[0].id));
+      } else {
+        await db.insert(roadStructures).values({
+          structureNo: sno,
+          ...measurement,
+          status: (text(row, "status") || "Not Started") as any,
+          billableQuantity: numberText(row, "billableQuantity", "0.000"),
+        });
+      }
       return;
+    }
     default:
       throw new Error(`Unsupported sheet '${sheet}'. Download the latest template.`);
   }
