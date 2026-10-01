@@ -59,12 +59,24 @@ export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
       if (process.env.DB_SSL === "true") {
-        // TLS connection (e.g. TiDB Cloud Serverless free tier).
-        const connection = await mysql.createConnection({
+        // TLS connection pool (e.g. TiDB Cloud Serverless free tier).
+        // A pool (not a single connection) survives dropped / idle-closed
+        // connections: the driver opens a fresh connection automatically,
+        // so logins and queries keep working after Render restarts or
+        // TiDB closes an idle socket.
+        const pool = mysql.createPool({
           ...parseDatabaseUrl(process.env.DATABASE_URL),
           ssl: { rejectUnauthorized: true },
+          waitForConnections: true,
+          connectionLimit: 5,
+          maxIdle: 5,
+          idleTimeout: 60000,
+          enableKeepAlive: true,
+          keepAliveInitialDelay: 10000,
         });
-        _db = drizzle(connection);
+        // NOTE: mysql2/promise ka Pool type aur drizzle ke expected Pool type
+        // typings me alag hain (dual-package), runtime object ek jaisa hai.
+        _db = drizzle(pool as any);
       } else {
         _db = drizzle(process.env.DATABASE_URL);
       }
