@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import {
   activities,
   approvalSignoffs,
@@ -285,20 +285,54 @@ async function importRow(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, she
         manpower: optional(row, "manpower"), machinery: optional(row, "machinery"), weather: optional(row, "weather") || "Clear / Sunny", hindrance: optional(row, "hindrance"), remarks: optional(row, "remarks"), sitePhotos: optional(row, "sitePhotos"),
       });
       return;
-    case "e-MB":
+    case "e-MB": {
       required(row, ["mbNo", "mbDate", "projectId", "roadId", "itemCode", "locationFrom", "locationTo", "length", "unit"]);
+      const embMbNo = text(row, "mbNo");
+      const embBoqId = resolve(refs.boq, row, "itemCode");
+      const embQty = numberText(row, "calculatedQuantity");
+      const embLocFrom = text(row, "locationFrom");
+      // Idempotency: skip if same mbNo + boqItem + location + quantity already exists
+      const dup = await db.select({ id: measurementEntries.id }).from(measurementEntries)
+        .where(and(
+          eq(measurementEntries.mbNo, embMbNo),
+          eq(measurementEntries.boqItemId, embBoqId),
+          eq(measurementEntries.locationFrom, embLocFrom),
+          eq(measurementEntries.calculatedQuantity, embQty)
+        )).limit(1);
+      if (dup.length > 0) {
+        return; // already imported, skip
+      }
       await db.insert(measurementEntries).values({
-        mbNo: text(row, "mbNo"), mbDate: text(row, "mbDate"), projectId: resolve(refs.projects, row, "projectId"), roadId: resolve(refs.roads, row, "roadId"), boqItemId: resolve(refs.boq, row, "itemCode"), activityId: resolveOptional(refs.activities, row, "taskId"),
-        locationFrom: text(row, "locationFrom"), locationTo: text(row, "locationTo"), length: numberText(row, "length"), width: numberText(row, "width"), depth: numberText(row, "depth"), calculatedQuantity: numberText(row, "calculatedQuantity"), unit: text(row, "unit"), rate: numberText(row, "rate"), amount: numberText(row, "amount"), status: (text(row, "status") || "Draft") as any, submittedBy: optional(row, "submittedBy"), checkedBy: optional(row, "checkedBy"), remarks: optional(row, "remarks"),
+        mbNo: embMbNo, mbDate: text(row, "mbDate"), projectId: resolve(refs.projects, row, "projectId"), roadId: resolve(refs.roads, row, "roadId"), boqItemId: embBoqId, activityId: resolveOptional(refs.activities, row, "taskId"),
+        locationFrom: embLocFrom, locationTo: text(row, "locationTo"), length: numberText(row, "length"), width: numberText(row, "width"), depth: numberText(row, "depth"), calculatedQuantity: embQty, unit: text(row, "unit"), rate: numberText(row, "rate"), amount: numberText(row, "amount"), status: (text(row, "status") || "Draft") as any, submittedBy: optional(row, "submittedBy"), checkedBy: optional(row, "checkedBy"), remarks: optional(row, "remarks"),
       });
+      // AUTOMATION: If imported as Approved, update BOQ executed quantity (matches app UI behavior)
+      if ((text(row, "status") || "Draft") === "Approved") {
+        const boqRows = await db.select().from(boqItems).where(eq(boqItems.id, embBoqId)).limit(1);
+        if (boqRows.length > 0) {
+          const boq = boqRows[0];
+          const qtyNum = parseFloat(embQty || "0");
+          const newExec = (parseFloat(String(boq.executedQuantity || "0")) + qtyNum).toFixed(3);
+          const newBal = (parseFloat(String(boq.contractQuantity || "0")) - parseFloat(newExec)).toFixed(3);
+          await db.update(boqItems).set({ executedQuantity: newExec, balanceQuantity: newBal }).where(eq(boqItems.id, embBoqId));
+        }
+      }
       return;
-    case "Billing":
+    }
+    case "Billing": {
       required(row, ["billId", "projectId", "roadId", "billType"]);
+      const bId = text(row, "billId");
+      // Idempotency: skip if billId already exists
+      const bDup = await db.select({ id: billing.id }).from(billing).where(eq(billing.billId, bId)).limit(1);
+      if (bDup.length > 0) {
+        return; // already imported, skip
+      }
       await db.insert(billing).values({
-        billId: text(row, "billId"), projectId: resolve(refs.projects, row, "projectId"), roadId: resolve(refs.roads, row, "roadId"), billType: text(row, "billType"),
+        billId: bId, projectId: resolve(refs.projects, row, "projectId"), roadId: resolve(refs.roads, row, "roadId"), billType: text(row, "billType"),
         measurementStatus: (text(row, "measurementStatus") || "Pending") as any, quantityCalculationStatus: (text(row, "quantityCalculationStatus") || "Pending") as any, abstractStatus: (text(row, "abstractStatus") || "Pending") as any, billPrepared: (text(row, "billPrepared") || "No") as any, submissionDate: optional(row, "submissionDate"), verificationStatus: (text(row, "verificationStatus") || "Measurement") as any, passedAmount: optional(row, "passedAmount"), paymentStatus: (text(row, "paymentStatus") || "Unpaid") as any, paymentDate: optional(row, "paymentDate"), periodFrom: optional(row, "periodFrom"), periodTo: optional(row, "periodTo"), grossAmount: optional(row, "grossAmount"), gstAmount: optional(row, "gstAmount"), retentionAmount: optional(row, "retentionAmount"), netPayable: optional(row, "netPayable"), remarks: optional(row, "remarks"),
       });
       return;
+    }
     case "Hindrances":
       required(row, ["hindranceId", "projectId", "roadId", "rdLocation", "category", "description", "dateRaised", "affectedActivity", "responsiblePersonDepartment"]);
       await db.insert(hindrances).values({ hindranceId: text(row, "hindranceId"), projectId: resolve(refs.projects, row, "projectId"), roadId: resolve(refs.roads, row, "roadId"), rdLocation: text(row, "rdLocation"), category: text(row, "category") as any, description: text(row, "description"), dateRaised: text(row, "dateRaised"), affectedActivity: text(row, "affectedActivity"), affectedLength: optional(row, "affectedLength"), responsiblePersonDepartment: text(row, "responsiblePersonDepartment"), letterNumber: optional(row, "letterNumber"), status: (text(row, "status") || "Open") as any, dueDate: optional(row, "dueDate"), resolutionDate: optional(row, "resolutionDate"), daysPending: Number(numberText(row, "daysPending")), remarks: optional(row, "remarks"), supportingPhotosDocuments: optional(row, "supportingPhotosDocuments") });
