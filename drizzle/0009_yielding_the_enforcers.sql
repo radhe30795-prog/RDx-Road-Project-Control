@@ -1,0 +1,23 @@
+CREATE TABLE `road_structures` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`structureNo` varchar(80) NOT NULL,
+	`projectId` int NOT NULL,
+	`roadId` int NOT NULL,
+	`structureType` enum('Slab Culvert','HPC','Box Culvert','Minor Bridge','Causeway','Retaining Wall','Toe Wall','Drain','Other') NOT NULL,
+	`chainageFrom` varchar(50) NOT NULL,
+	`chainageTo` varchar(50),
+	`locationDescription` varchar(255),
+	`count` decimal(10,2) NOT NULL DEFAULT '1.00',
+	`length` decimal(12,3),
+	`width` decimal(12,3),
+	`height` decimal(12,3),
+	`quantity` decimal(14,3) NOT NULL DEFAULT '0.000',
+	`unit` varchar(30) NOT NULL DEFAULT 'Nos',
+	`status` enum('Not Started','In Progress','Completed','On Hold') NOT NULL DEFAULT 'Not Started',
+	`billableQuantity` decimal(14,3) NOT NULL DEFAULT '0.000',
+	`remarks` text,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `road_structures_id` PRIMARY KEY(`id`),
+	CONSTRAINT `road_structures_structureNo_unique` UNIQUE(`structureNo`)
+);

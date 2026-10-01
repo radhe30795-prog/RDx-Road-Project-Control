@@ -1,0 +1,65 @@
+# Render Blueprint — free-tier deploy of RDx Road Project Control.
+# Usage: Render Dashboard -> New -> Blueprint -> connect this repo (or upload),
+# then fill the `sync: false` values (DATABASE_URL from TiDB Cloud, Firebase,
+# R2 keys). Nothing here costs money on the free plan.
+services:
+  - type: web
+    name: rdx-road-control
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      # --- Database: TiDB Cloud Serverless (free, MySQL-compatible) ---
+      # Create a free cluster at https://tidbcloud.com -> Connect -> get the
+      # connection string, e.g.
+      # mysql://<user>:<pass>@<host>:4000/rdx
+      - key: DATABASE_URL
+        sync: false
+      # TiDB Cloud requires TLS
+      - key: DB_SSL
+        value: true
+      - key: JWT_SECRET
+        generateValue: true
+      # Public URL of this Render service (set after first deploy), e.g.
+      # https://rdx-road-control.onrender.com
+      - key: APP_BASE_URL
+        sync: false
+      # --- Google login (Firebase, free) ---
+      - key: VITE_FIREBASE_API_KEY
+        sync: false
+      - key: VITE_FIREBASE_APP_ID
+        sync: false
+      - key: VITE_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: VITE_FIREBASE_MESSAGING_SENDER_ID
+        sync: false
+      - key: VITE_FIREBASE_PROJECT_ID
+        sync: false
+      - key: VITE_FIREBASE_STORAGE_BUCKET
+        sync: false
+      - key: GOOGLE_ADMIN_EMAIL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      # --- File storage (Cloudflare R2, free 10 GB) ---
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        value: auto
+      - key: S3_BUCKET
+        value: rdx-uploads
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_PUBLIC_URL
+        sync: false
+      - key: S3_FORCE_PATH_STYLE
+        value: true
