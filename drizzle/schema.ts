@@ -622,6 +622,30 @@ export type MachineryLog = typeof machineryLogs.$inferSelect;
 export type InsertMachineryLog = typeof machineryLogs.$inferInsert;
 
 /**
+ * 10B. MACHINERY COMPLIANCE & SERVICE TRACKER
+ * Registration / PUC / Road Tax / Insurance / Fitness / Permit documents
+ * and servicing records. `expiryDate` is the trigger date for due alerts.
+ */
+export const machineryCompliance = mysqlTable("machinery_compliance", {
+  id: int("id").autoincrement().primaryKey(),
+  assetId: int("assetId").notNull(),
+  projectId: int("projectId").notNull(),
+  docType: mysqlEnum("docType", ["Registration", "PUC", "Road Tax", "Insurance", "Fitness", "Permit", "Service", "Other"]).notNull(),
+  docNumber: varchar("docNumber", { length: 100 }),
+  issueDate: varchar("issueDate", { length: 20 }),
+  expiryDate: varchar("expiryDate", { length: 20 }).notNull(),
+  amount: decimal("amount", { precision: 14, scale: 2 }).default("0.00"),
+  vendor: varchar("vendor", { length: 255 }),
+  meterReading: decimal("meterReading", { precision: 12, scale: 2 }),
+  remarks: text("remarks"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type MachineryCompliance = typeof machineryCompliance.$inferSelect;
+export type InsertMachineryCompliance = typeof machineryCompliance.$inferInsert;
+
+/**
  * 10C. DIGITAL SIGN-OFF WORKFLOW
  */
 export const approvalSignoffs = mysqlTable("approval_signoffs", {
