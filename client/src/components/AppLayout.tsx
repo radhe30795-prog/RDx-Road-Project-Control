@@ -78,6 +78,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const { data: notifs, refetch: refetchNotifs } = trpc.notifications.list.useQuery({ unreadOnly: true });
   const { data: stats } = trpc.dashboard.getStats.useQuery();
+  const { data: projects } = trpc.projects.list.useQuery();
+  const headerProject = projects?.[0];
+  const headerProjectLabel = headerProject
+    ? `${headerProject.projectName} • ${headerProject.clientDepartment || ""}`.trim()
+    : "RDx Road Project Control";
 
   const markRead = trpc.notifications.markAsRead.useMutation({
     onSuccess: () => refetchNotifs(),
@@ -140,7 +145,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-400 hidden sm:block truncate max-w-sm">
-                    SH-42 & MDR Pkg-04 • PWD Highway Authority
+                    {headerProjectLabel}
                   </p>
                 </div>
               </Link>
