@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useRole } from "../components/AppLayout";
+import { useActiveProject } from "../components/ProjectContext";
 
 export default function MachineryPage() {
   const { role } = useRole();
@@ -62,11 +63,11 @@ export default function MachineryPage() {
   const [logOperator, setLogOperator] = useState("Ramesh Kumar");
   const [workDesc, setWorkDesc] = useState("Subgrade compaction at RD 0+000 to 0+500");
 
-  const { data: projects } = trpc.projects.list.useQuery();
-  const activeProjectId = projects?.[0]?.id || 1;
-  const { data: roads } = trpc.roads.list.useQuery();
-  const { data: assets, refetch: refetchAssets } = trpc.machinery.assetsList.useQuery();
+  const { projectId: activeProjectId } = useActiveProject();
+  const { data: roads } = trpc.roads.list.useQuery({ projectId: activeProjectId });
+  const { data: assets, refetch: refetchAssets } = trpc.machinery.assetsList.useQuery({ projectId: activeProjectId });
   const { data: logs, isLoading, refetch: refetchLogs } = trpc.machinery.logsList.useQuery({
+    projectId: activeProjectId,
     roadId: selectedRoadId !== "All" ? parseInt(selectedRoadId) : undefined,
   });
 
@@ -76,11 +77,11 @@ export default function MachineryPage() {
   const deleteComplianceMutation = trpc.machinery.deleteCompliance.useMutation();
   const alertsMutation = trpc.machinery.generateComplianceAlerts.useMutation();
 
-  const { data: complianceRows, refetch: refetchCompliance } = trpc.machinery.complianceList.useQuery();
+  const { data: complianceRows, refetch: refetchCompliance } = trpc.machinery.complianceList.useQuery({ projectId: activeProjectId });
 
   // Generate due-date alerts once when the page loads (server dedupes, no spam)
   useEffect(() => {
-    alertsMutation.mutate({});
+    alertsMutation.mutate({ projectId: activeProjectId });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -112,7 +113,7 @@ export default function MachineryPage() {
     try {
       await createComplianceMutation.mutateAsync({
         assetId: parseInt(compAssetId),
-        projectId: activeProjectId,
+        projectId: activeProjectId as number,
         docType: compDocType as "Registration" | "PUC" | "Road Tax" | "Insurance" | "Fitness" | "Permit" | "Service" | "Other",
         docNumber: compDocNo.trim() || undefined,
         issueDate: compIssueDate || undefined,
@@ -127,7 +128,7 @@ export default function MachineryPage() {
       setCompDocNo(""); setCompExpiryDate(""); setCompAmount("");
       setCompVendor(""); setCompMeter(""); setCompRemarks("");
       refetchCompliance();
-      alertsMutation.mutate({});
+      alertsMutation.mutate({ projectId: activeProjectId });
     } catch (err: any) {
       toast.error(err.message || "Failed to save compliance record");
     }
@@ -139,7 +140,7 @@ export default function MachineryPage() {
       const code = assetNo.trim() || `EQ-${Date.now().toString().slice(-4)}`;
       await createAssetMutation.mutateAsync({
         assetNo: code,
-        projectId: activeProjectId,
+        projectId: activeProjectId as number,
         assetType,
         makeModel: makeModel.trim() || undefined,
         registrationNo: regNo.trim() || undefined,
@@ -163,7 +164,7 @@ export default function MachineryPage() {
       await createLogMutation.mutateAsync({
         logNo: lNo,
         logDate,
-        projectId: activeProjectId,
+        projectId: activeProjectId as number,
         roadId: logRoadId,
         assetId: logAssetId,
         openingHourMeter: logOpenH,
