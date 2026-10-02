@@ -162,6 +162,13 @@
       "when": 1790934718149,
       "tag": "0022_wo_doc_lang",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "5",
+      "when": 1790936000000,
+      "tag": "0023_wo_item_quantity",
+      "breakpoints": true
     }
   ]
 }
