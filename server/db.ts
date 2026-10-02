@@ -1623,12 +1623,29 @@ export async function getWorkOrders(roadId?: number, subcontractorId?: number, p
     .leftJoin(subcontractors, eq(workOrders.subcontractorId, subcontractors.id))
     .orderBy(desc(workOrders.id));
 
-  return rows.filter((r) => {
+  const filtered = rows.filter((r) => {
     if (roadId && r.wo.roadId !== roadId) return false;
     if (subcontractorId && r.wo.subcontractorId !== subcontractorId) return false;
     if (projectId && r.wo.projectId !== projectId) return false;
     return true;
   });
+
+  // Attach BOQ line items per work order (single batched query)
+  const woIds = filtered.map((r) => r.wo.id);
+  let itemsByWo: Record<number, typeof workOrderItems.$inferSelect[]> = {};
+  if (woIds.length > 0) {
+    const { inArray } = await import("drizzle-orm");
+    const allItems = await db.select().from(workOrderItems)
+      .where(inArray(workOrderItems.workOrderId, woIds))
+      .orderBy(workOrderItems.sortOrder, workOrderItems.srNo);
+    for (const it of allItems) {
+      const key = it.workOrderId as number;
+      if (!itemsByWo[key]) itemsByWo[key] = [];
+      itemsByWo[key].push(it);
+    }
+  }
+
+  return filtered.map((r) => ({ ...r, items: itemsByWo[r.wo.id] || [] }));
 }
 
 export async function createWorkOrder(data: InsertWorkOrder) {
@@ -1709,6 +1726,62 @@ export async function getWorkOrderDocument(workOrderId: number) {
     road: roadRows[0] || null,
     project: projRows[0] || null,
     items,
+  };
+}
+
+// ----------------- SUBCONTRACTOR LEDGER (consolidated account per sub per site) -----------------
+export async function getSubcontractorLedger(subcontractorId: number, roadId?: number, projectId?: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  const subRows = await db.select().from(subcontractors).where(eq(subcontractors.id, subcontractorId)).limit(1);
+  if (subRows.length === 0) throw new Error("Subcontractor not found");
+  const sub = subRows[0];
+
+  // Reuse the WO list helper (includes road + BOQ line items per WO)
+  const wos = await getWorkOrders(roadId, subcontractorId, projectId);
+
+  let totalAwarded = 0;
+  let totalExecValue = 0;
+  let totalPaid = 0;
+  let totalRetention = 0;
+  const payments: { date: string; amount: number; woNo: string; remarks: string }[] = [];
+
+  for (const r of wos) {
+    const wo = r.wo;
+    totalAwarded += parseFloat(String(wo.awardedAmount || 0));
+    totalPaid += parseFloat(String(wo.paidAmount || 0));
+    totalRetention += parseFloat(String(wo.retentionAmount || 0));
+    const execQty = parseFloat(String(wo.executedQuantity || 0));
+    const rate = parseFloat(String(wo.rate || 0));
+    totalExecValue += execQty * rate;
+    // Parse payment notes appended to remarks: "Payment ₹50,000 on 2026-09-15: remarks"
+    const rem = String(wo.remarks || "");
+    for (const line of rem.split("\n")) {
+      const m = line.match(/Payment ₹([\d,]+(?:\.\d+)?) on (\d{4}-\d{2}-\d{2})(?::\s*(.*))?/);
+      if (m) {
+        payments.push({
+          date: m[2],
+          amount: parseFloat(m[1].replace(/,/g, "")),
+          woNo: wo.workOrderNo,
+          remarks: (m[3] || "").trim(),
+        });
+      }
+    }
+  }
+  payments.sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  return {
+    subcontractor: sub,
+    workOrders: wos,
+    totals: {
+      woCount: wos.length,
+      totalAwarded,
+      totalExecValue,
+      totalPaid,
+      balancePayable: Math.max(0, totalExecValue - totalPaid),
+      totalRetention,
+    },
+    payments,
   };
 }
 
