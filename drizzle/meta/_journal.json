@@ -190,6 +190,13 @@
       "when": 1790952836864,
       "tag": "0026_split_gsb_wmm",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "5",
+      "when": 1790865600000,
+      "tag": "0027_activity_manual_lock",
+      "breakpoints": true
     }
   ]
 }
