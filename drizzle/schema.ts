@@ -568,12 +568,31 @@ export const workOrders = mysqlTable("work_orders", {
   targetDate: varchar("targetDate", { length: 20 }).notNull(),
   status: mysqlEnum("status", ["Draft", "Issued", "In Progress", "Completed", "Closed", "On Hold"]).default("Draft").notNull(),
   remarks: text("remarks"),
+  termsOverride: text("termsOverride"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type WorkOrder = typeof workOrders.$inferSelect;
 export type InsertWorkOrder = typeof workOrders.$inferInsert;
+
+/**
+ * 10C. WORK ORDER BOQ ITEMS (multiple rate items per work order — for Hindi WO document)
+ */
+export const workOrderItems = mysqlTable("work_order_items", {
+  id: int("id").autoincrement().primaryKey(),
+  workOrderId: int("workOrderId").notNull(),
+  srNo: int("srNo").default(1).notNull(),
+  description: text("description").notNull(),
+  unit: varchar("unit", { length: 30 }).notNull(),
+  rate: decimal("rate", { precision: 14, scale: 2 }).default("0.00").notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type WorkOrderItem = typeof workOrderItems.$inferSelect;
+export type InsertWorkOrderItem = typeof workOrderItems.$inferInsert;
 
 /**
  * 10B. PLANT, MACHINERY & FUEL LOGBOOK
