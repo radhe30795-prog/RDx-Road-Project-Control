@@ -61,7 +61,7 @@ export const appRouter = router({
     setRole: adminProcedure
       .input(z.object({
         id: z.number(),
-        role: z.enum(["user", "admin", "project_manager", "qs_billing_engineer", "site_engineer", "qa_qc_engineer", "hr_payroll_manager"]),
+        role: z.enum(["user", "admin", "project_manager", "qs_billing_engineer", "site_engineer", "qa_qc_engineer", "hr_payroll_manager", "site_coordinator"]),
       }))
       .mutation(async ({ input }) => {
         const target = await db.getUserById(input.id);
@@ -647,6 +647,7 @@ export const appRouter = router({
         roadId: z.number().optional(),
         date: z.string().optional(),
         sectionType: z.enum(["Highway Works", "Concrete Works", "Material", "Machine"]).optional(),
+        projectId: z.number().optional(),
       }).nullish())
       .query(async ({ input }) => {
         return db.getDailyProgressList(input || undefined);
@@ -800,9 +801,9 @@ export const appRouter = router({
   // 4E. MATERIAL WASTAGE & VARIANCE AUDIT ROUTER
   materialVariances: router({
     list: publicProcedure
-      .input(z.object({ roadId: z.number().optional() }).nullish())
+      .input(z.object({ roadId: z.number().optional(), projectId: z.number().optional() }).nullish())
       .query(async ({ input }) => {
-        return db.getMaterialVariances(input?.roadId);
+        return db.getMaterialVariances(input?.roadId, input?.projectId);
       }),
     compute: publicProcedure
       .input(z.object({
@@ -917,9 +918,9 @@ export const appRouter = router({
   // 6. HINDRANCE ROUTER
   hindrances: router({
     list: publicProcedure
-      .input(z.object({ roadId: z.number().optional() }).nullish())
+      .input(z.object({ roadId: z.number().optional(), projectId: z.number().optional() }).nullish())
       .query(async ({ input }) => {
-        return db.getHindrances(input?.roadId);
+        return db.getHindrances(input?.roadId, input?.projectId);
       }),
     create: publicProcedure
       .input(z.object({
@@ -969,9 +970,9 @@ export const appRouter = router({
   // 7. QA/QC ROUTER
   qaQc: router({
     list: publicProcedure
-      .input(z.object({ roadId: z.number().optional() }).nullish())
+      .input(z.object({ roadId: z.number().optional(), projectId: z.number().optional() }).nullish())
       .query(async ({ input }) => {
-        return db.getQaQcTests(input?.roadId);
+        return db.getQaQcTests(input?.roadId, input?.projectId);
       }),
     create: publicProcedure
       .input(z.object({
@@ -1063,9 +1064,9 @@ export const appRouter = router({
   // 9. DOCUMENTS ROUTER
   documents: router({
     list: publicProcedure
-      .input(z.object({ category: z.string().optional() }).nullish())
+      .input(z.object({ category: z.string().optional(), projectId: z.number().optional() }).nullish())
       .query(async ({ input }) => {
-        return db.getDocuments(input?.category);
+        return db.getDocuments(input?.category, input?.projectId);
       }),
     create: publicProcedure
       .input(z.object({
@@ -1231,9 +1232,9 @@ export const appRouter = router({
   // MATERIAL ISSUES & DPR CONSUMPTION ROUTER
   materialIssues: router({
     list: publicProcedure
-      .input(z.object({ roadId: z.number().optional() }).nullish())
+      .input(z.object({ roadId: z.number().optional(), projectId: z.number().optional() }).nullish())
       .query(async ({ input }) => {
-        return db.getMaterialIssuesList(input?.roadId);
+        return db.getMaterialIssuesList(input?.roadId, input?.projectId);
       }),
     create: publicProcedure
       .input(z.object({
@@ -1275,9 +1276,9 @@ export const appRouter = router({
         return db.createSubcontractor(input);
       }),
     workOrdersList: publicProcedure
-      .input(z.object({ roadId: z.number().optional(), subcontractorId: z.number().optional() }).nullish())
+      .input(z.object({ roadId: z.number().optional(), subcontractorId: z.number().optional(), projectId: z.number().optional() }).nullish())
       .query(async ({ input }) => {
-        return db.getWorkOrders(input?.roadId, input?.subcontractorId);
+        return db.getWorkOrders(input?.roadId, input?.subcontractorId, input?.projectId);
       }),
     createWorkOrder: publicProcedure
       .input(z.object({
@@ -1340,9 +1341,9 @@ export const appRouter = router({
         return db.createMachineryAsset(input);
       }),
     logsList: publicProcedure
-      .input(z.object({ roadId: z.number().optional(), assetId: z.number().optional() }).nullish())
+      .input(z.object({ roadId: z.number().optional(), assetId: z.number().optional(), projectId: z.number().optional() }).nullish())
       .query(async ({ input }) => {
-        return db.getMachineryLogs(input?.roadId, input?.assetId);
+        return db.getMachineryLogs(input?.roadId, input?.assetId, input?.projectId);
       }),
     createLog: publicProcedure
       .input(z.object({
