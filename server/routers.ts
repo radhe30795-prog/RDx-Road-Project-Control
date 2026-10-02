@@ -1386,6 +1386,16 @@ export const appRouter = router({
       .query(async ({ input }) => {
         return db.getWorkOrderDocument(input.workOrderId);
       }),
+    // Consolidated subcontractor ledger per site (road)
+    ledger: publicProcedure
+      .input(z.object({
+        subcontractorId: z.number(),
+        roadId: z.number().optional(),
+        projectId: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        return db.getSubcontractorLedger(input.subcontractorId, input.roadId, input.projectId);
+      }),
   }),
 
   // 10B. PLANT, MACHINERY & FUEL LOGBOOK ROUTER
