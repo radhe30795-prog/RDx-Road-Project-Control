@@ -254,6 +254,7 @@ export const appRouter = router({
         }
 
         let updated = 0;
+        let skipped = 0;
         const groupList = Array.from(groups.values());
         const { and } = await import("drizzle-orm");
         for (const g of groupList) {
@@ -263,20 +264,34 @@ export const appRouter = router({
           const pctStr = pct.toFixed(2);
           const status = pct >= 100 ? "Complete" : pct > 0 ? "In Progress" : "Not Started";
           for (const phase of g.phases) {
+            // NEVER overwrite manually-locked activities
+            const lockedRows = await database
+              .select({ id: activities.id })
+              .from(activities)
+              .where(
+                and(
+                  eq(activities.roadId, g.roadId),
+                  eq(activities.phase, phase as any),
+                  eq(activities.isManual, true)
+                )
+              );
+            skipped += lockedRows.length;
             const result = await database
               .update(activities)
               .set({ status: status as any, percentageComplete: pctStr })
               .where(
                 and(
                   eq(activities.roadId, g.roadId),
-                  eq(activities.phase, phase as any)
+                  eq(activities.phase, phase as any),
+                  eq(activities.isManual, false)
                 )
               );
             const affected = (result as any)[0]?.affectedRows || 0;
             updated += affected;
           }
         }
-        return { updated, message: `Synced ${updated} activities with proportional BOQ progress.` };
+        const skipMsg = skipped > 0 ? ` Skipped ${skipped} manually-locked ${skipped === 1 ? "activity" : "activities"} (🔒 protected).` : "";
+        return { updated, skipped, message: `Synced ${updated} activities with proportional BOQ progress.${skipMsg}` };
       }),
   }),
 
@@ -652,7 +667,12 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         const { id, ...data } = input;
-        const result = await db.updateActivity(id, data);
+        // Manual updates lock the activity: sync will never overwrite it
+        const updateData: Record<string, unknown> = { ...data };
+        if (data.percentageComplete !== undefined || data.status !== undefined) {
+          updateData.isManual = true;
+        }
+        const result = await db.updateActivity(id, updateData);
         // Auto-update road progress from activities average
         try {
           const database = await db.getDb();
@@ -671,6 +691,20 @@ export const appRouter = router({
           }
         } catch { /* road progress update is best-effort */ }
         return result;
+      }),
+    unlockManual: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const result = await db.updateActivity(input.id, { isManual: false } as any);
+        return { ok: true, result };
+      }),
+    lockManual: publicProcedure
+      .input(z.object({ id: z.number(), note: z.string().optional() }))
+      .mutation(async ({ input }) => {
+        const data: Record<string, unknown> = { isManual: true };
+        if (input.note) data.manualNote = input.note;
+        const result = await db.updateActivity(input.id, data as any);
+        return { ok: true, result };
       }),
   }),
 
