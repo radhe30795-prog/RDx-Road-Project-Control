@@ -36,7 +36,8 @@ import {
   UsersRound,
   FileUp,
   SlidersHorizontal,
-  Calculator
+  Calculator,
+  Target
 } from "lucide-react";
 import { trpc } from "../lib/trpc";
 import { useAuth } from "../_core/hooks/useAuth";
@@ -114,6 +115,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
     { href: "/reports", label: "Reports & PDF Export", icon: FileText, highlight: true },
     { href: "/billing", label: "Billing & QS Control", icon: Receipt, badge: stats?.submittedBills ? `${stats.submittedBills} Sub` : undefined, badgeColor: "bg-emerald-500" },
     { href: "/rate-analysis", label: "Rate Analysis (QS)", icon: Calculator, highlight: true },
+    { href: "/projection", label: "Progress Projection", icon: Target, highlight: true },
     { href: "/hindrances", label: "Hindrance Register", icon: AlertTriangle, count: stats?.openHindrances, alertCount: stats?.overdueHindrances },
     { href: "/qa-qc", label: "QA / QC Testing", icon: Microscope, alertCount: stats?.qaQcFailedTests },
     { href: "/materials", label: "Materials & Balance", icon: Boxes },
