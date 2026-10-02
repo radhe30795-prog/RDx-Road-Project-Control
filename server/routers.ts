@@ -10,7 +10,7 @@ import { importHrEmployees, importWorkbook, WorkbookRows } from "./imports";
 import { clearDemoProjectData } from "./clearDemo";
 import { storagePut } from "./storage";
 import { eq, like } from "drizzle-orm";
-import { measurementEntries, boqItems } from "../drizzle/schema";
+import { measurementEntries, boqItems, activities } from "../drizzle/schema";
 
 export const appRouter = router({
   system: systemRouter,
@@ -144,21 +144,23 @@ export const appRouter = router({
       .mutation(async () => {
         const database = await db.getDb();
         if (!database) throw new Error("Database not connected");
-        const { sql } = await import("drizzle-orm");
-        // Sum Approved e-MB quantities per BOQ item
-        const sums = await database.execute(sql`
-          SELECT boq_item_id as boqItemId, SUM(CAST(calculated_quantity AS DECIMAL(18,3))) as totalQty
-          FROM measurement_entries
-          WHERE status = 'Approved' AND boq_item_id IS NOT NULL
-          GROUP BY boq_item_id
-        `);
+        const { sql, sum } = await import("drizzle-orm");
+        // Sum Approved e-MB quantities per BOQ item using Drizzle
+        const sums = await database
+          .select({
+            boqItemId: measurementEntries.boqItemId,
+            totalQty: sum(measurementEntries.calculatedQuantity),
+          })
+          .from(measurementEntries)
+          .where(sql`${measurementEntries.status} = 'Approved' AND ${measurementEntries.boqItemId} IS NOT NULL`)
+          .groupBy(measurementEntries.boqItemId);
         let updated = 0;
-        const rows = (sums as any)[0] as Array<{ boqItemId: number; totalQty: string }>;
-        for (const r of rows) {
+        for (const r of sums) {
+          if (!r.boqItemId) continue;
           const boqRows = await database.select().from(boqItems).where(eq(boqItems.id, r.boqItemId)).limit(1);
           if (boqRows.length > 0) {
             const boq = boqRows[0];
-            const execQty = parseFloat(r.totalQty || "0");
+            const execQty = parseFloat(String(r.totalQty || "0"));
             const contractQty = parseFloat(String(boq.contractQuantity || "0"));
             const newBal = Math.max(0, contractQty - execQty).toFixed(3);
             await database.update(boqItems).set({
@@ -215,16 +217,21 @@ export const appRouter = router({
 
         let updated = 0;
         const groupList = Array.from(groups.values());
+        const { and, ne } = await import("drizzle-orm");
         for (const g of groupList) {
           // Only mark complete if ALL BOQ items in this chapter+road are 100%
           if (g.total === 0 || g.complete < g.total) continue;
           for (const phase of g.phases) {
-            const result = await database.execute(sql`
-              UPDATE activities
-              SET status = 'Complete', percentage_complete = '100.00'
-              WHERE road_id = ${g.roadId} AND phase = ${phase}
-              AND status != 'Complete'
-            `);
+            const result = await database
+              .update(activities)
+              .set({ status: "Complete" as any, percentageComplete: "100.00" })
+              .where(
+                and(
+                  eq(activities.roadId, g.roadId),
+                  eq(activities.phase, phase as any),
+                  ne(activities.status, "Complete" as any)
+                )
+              );
             const affected = (result as any)[0]?.affectedRows || 0;
             updated += affected;
           }
