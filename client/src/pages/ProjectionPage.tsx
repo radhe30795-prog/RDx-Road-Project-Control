@@ -82,7 +82,7 @@ export default function ProjectionPage() {
     if (isNaN(tPct) || isNaN(tDate.getTime())) return null;
     const monthsAhead = monthDiff(today, tDate);
     if (monthsAhead <= 0)
-      return { tPct, tDate, monthsAhead, requiredRate: 0, gap: 0, verdict: "", verdictGood: false, error: "Target month aaj se aage hona chahiye" as string | null };
+      return { tPct, tDate, monthsAhead, requiredRate: 0, gap: 0, verdict: "", verdictGood: false, error: "Target month must be in the future" as string | null };
     const requiredRate = (tPct - currentProgress) / monthsAhead;
     const gap = requiredRate - currentRate;
     let verdict: string;
@@ -94,14 +94,14 @@ export default function ProjectionPage() {
       verdict = "Target current progress se kam hai — kuch karne ki zaroorat nahi.";
       verdictGood = true;
     } else if (requiredRate <= currentRate) {
-      verdict = `On track ✓ — current rate (${currentRate.toFixed(2)}%/mahina) se target ho jayega.`;
+      verdict = `On track ✓ — target will be met at the current rate (${currentRate.toFixed(2)}%/month).`;
       verdictGood = true;
     } else if (currentRate <= 0) {
-      verdict = `Abhi progress 0 hai — pehle kaam start karo. Target ke liye ${requiredRate.toFixed(2)}%/mahina chahiye.`;
+      verdict = `No progress yet — work needs to start. Target requires ${requiredRate.toFixed(2)}%/month.`;
       verdictGood = false;
     } else {
       const mult = requiredRate / currentRate;
-      verdict = `${gap.toFixed(2)}%/mahina tez karna hoga — current speed ka ${mult.toFixed(1)}x. Matlab zyada manpower/machinery ya overtime.`;
+      verdict = `Need ${gap.toFixed(2)}%/month faster — ${mult.toFixed(1)}x current speed. Means more manpower/machinery or overtime.`;
       verdictGood = false;
     }
     return { tPct, tDate, monthsAhead, requiredRate, gap, verdict, verdictGood, error: null as string | null };
@@ -126,7 +126,7 @@ export default function ProjectionPage() {
               Progress Projection
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Current speed se forecast • Target ke liye kitni speed chahiye
+              Forecast at current speed • Required speed for target
             </p>
           </div>
           <select
@@ -160,12 +160,12 @@ export default function ProjectionPage() {
           <p className="text-[11px] font-bold text-slate-500 uppercase flex items-center gap-1">
             <Gauge className="w-3.5 h-3.5" /> Current Speed
           </p>
-          <p className="text-2xl font-bold text-violet-700 mt-1">{currentRate.toFixed(2)}<span className="text-sm font-semibold text-slate-500">%/mahina</span></p>
+          <p className="text-2xl font-bold text-violet-700 mt-1">{currentRate.toFixed(2)}<span className="text-sm font-semibold text-slate-500">%/month</span></p>
           <p className="text-[10px] text-slate-400 mt-0.5">Abhi jis rate se kaam ho raha hai</p>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
           <p className="text-[11px] font-bold text-slate-500 uppercase flex items-center gap-1">
-            <CalendarClock className="w-3.5 h-3.5" /> 100% Kab Hoga
+            <CalendarClock className="w-3.5 h-3.5" /> 100% By
           </p>
           <p className="text-2xl font-bold text-emerald-700 mt-1">
             {dateOf100 ? fmtDate(dateOf100) : currentProgress >= 100 ? "Ho gaya! 🎉" : "—"}
@@ -176,7 +176,7 @@ export default function ProjectionPage() {
 
       {/* Forecast mode */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-4">
-        <h2 className="text-sm font-bold text-slate-800">🔮 Forecast — Us mahine tak kitna % hoga?</h2>
+        <h2 className="text-sm font-bold text-slate-800">🔮 Forecast — Progress by month</h2>
         <div className="flex flex-wrap items-center gap-3">
           <label className="text-xs font-semibold text-slate-600">Mahina chuno:</label>
           <input
@@ -231,7 +231,7 @@ export default function ProjectionPage() {
 
       {/* Target mode */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-4">
-        <h2 className="text-sm font-bold text-slate-800">🎯 Target — Itna % chahiye to kya karna hoga?</h2>
+        <h2 className="text-sm font-bold text-slate-800">🎯 Target — What will it take?</h2>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <label className="text-xs font-semibold text-slate-600">Target %:</label>
@@ -246,7 +246,7 @@ export default function ProjectionPage() {
             />
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-xs font-semibold text-slate-600">Kab tak:</label>
+            <label className="text-xs font-semibold text-slate-600">By when:</label>
             <input
               type="month"
               value={targetMonth}
@@ -259,13 +259,13 @@ export default function ProjectionPage() {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
               <p className="text-[10px] font-bold text-slate-500 uppercase">Chahiye Speed</p>
-              <p className="text-xl font-bold text-slate-900">{target.requiredRate.toFixed(2)}<span className="text-xs font-semibold text-slate-500">%/mahina</span></p>
+              <p className="text-xl font-bold text-slate-900">{target.requiredRate.toFixed(2)}<span className="text-xs font-semibold text-slate-500">%/month</span></p>
             </div>
             <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
               <p className="text-[10px] font-bold text-slate-500 uppercase">Gap vs Abhi</p>
               <p className={`text-xl font-bold ${target.gap > 0 ? "text-amber-600" : "text-emerald-600"}`}>
                 {target.gap > 0 ? `+${target.gap.toFixed(2)}` : target.gap.toFixed(2)}
-                <span className="text-xs font-semibold text-slate-500">%/mahina</span>
+                <span className="text-xs font-semibold text-slate-500">%/month</span>
               </p>
             </div>
             <div className={`rounded-lg p-3 border col-span-2 md:col-span-1 ${target.verdictGood ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}>
