@@ -1304,15 +1304,43 @@ export const appRouter = router({
     updateWorkOrder: publicProcedure
       .input(z.object({
         id: z.number(),
+        scope: z.string().optional(),
+        unit: z.string().optional(),
+        awardedQuantity: z.string().optional(),
+        rate: z.string().optional(),
         executedQuantity: z.string().optional(),
         paidAmount: z.string().optional(),
         retentionAmount: z.string().optional(),
+        startDate: z.string().optional(),
+        targetDate: z.string().optional(),
         status: z.enum(["Draft", "Issued", "In Progress", "Completed", "Closed", "On Hold"]).optional(),
         remarks: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         const { id, ...data } = input;
         return db.updateWorkOrder(id, data);
+      }),
+    deleteWorkOrder: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        return db.deleteWorkOrder(input.id);
+      }),
+    update: publicProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        subcontractorCode: z.string().optional(),
+        workCategory: z.string().optional(),
+        contactPerson: z.string().optional(),
+        phone: z.string().optional(),
+        gstin: z.string().optional(),
+        address: z.string().optional(),
+        status: z.enum(["Active", "On Hold", "Closed"]).optional(),
+        remarks: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        return db.updateSubcontractor(id, data);
       }),
   }),
 
