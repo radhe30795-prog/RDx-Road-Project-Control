@@ -553,9 +553,9 @@ export default function HrPayrollPage() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-auto boq-table-scroll" style={{ maxHeight: "60vh" }}>
               <table className="w-full min-w-[880px] text-left text-sm">
-                <thead className="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-400">
+                <thead className="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-400 sticky top-0 z-10">
                   <tr>
                     <th className="px-3 py-3">Employee</th>
                     <th className="px-3 py-3">Role / Dept</th>
@@ -1145,9 +1145,9 @@ export default function HrPayrollPage() {
 
             {/* Payroll Lines Table */}
             {payrollLines && payrollLines.length > 0 && (
-              <div className="overflow-x-auto">
+              <div className="overflow-auto boq-table-scroll" style={{ maxHeight: "60vh" }}>
                 <table className="w-full min-w-[1020px] text-left text-sm">
-                  <thead className="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-400">
+                  <thead className="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-400 sticky top-0 z-10">
                     <tr>
                       <th className="px-3 py-3">Employee</th>
                       <th className="px-3 py-3">Pay Basis & Rate</th>
@@ -1269,9 +1269,9 @@ export default function HrPayrollPage() {
                     </div>
                   )}
 
-                  <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-50 text-slate-400 font-bold uppercase tracking-wider border-b border-slate-200">
+                  <div className="overflow-auto boq-table-scroll rounded-xl border border-slate-200 bg-white" style={{ maxHeight: "40vh" }}>
+                    <table className="w-full min-w-[1100px] text-left text-xs">
+                      <thead className="bg-slate-50 text-slate-400 font-bold uppercase tracking-wider border-b border-slate-200 sticky top-0 z-10">
                         <tr>
                           <th className="px-3 py-3">Beneficiary</th>
                           <th className="px-3 py-3">Bank Details</th>
