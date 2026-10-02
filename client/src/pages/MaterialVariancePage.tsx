@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useRole } from "../components/AppLayout";
+import { useActiveProject } from "../components/ProjectContext";
 
 export default function MaterialVariancePage() {
   const { role } = useRole();
@@ -29,15 +30,15 @@ export default function MaterialVariancePage() {
   const [periodFrom, setPeriodFrom] = useState("2026-09-01");
   const [periodTo, setPeriodTo] = useState(new Date().toISOString().split("T")[0]);
 
-  const { data: projects } = trpc.projects.list.useQuery();
-  const activeProjectId = projects?.[0]?.id || 1;
-  const { data: roads } = trpc.roads.list.useQuery();
+  const { projectId: activeProjectId } = useActiveProject();
+  const { data: roads } = trpc.roads.list.useQuery({ projectId: activeProjectId });
   const { data: boqData } = trpc.boq.list.useQuery({
     roadId: compRoadId,
   });
-  const { data: inventoryData } = trpc.inventory.list.useQuery();
+  const { data: inventoryData } = trpc.inventory.list.useQuery({ projectId: activeProjectId });
 
   const { data: variances, isLoading, refetch } = trpc.materialVariances.list.useQuery({
+    projectId: activeProjectId,
     roadId: selectedRoadId !== "All" ? parseInt(selectedRoadId) : undefined,
   });
 
@@ -47,7 +48,7 @@ export default function MaterialVariancePage() {
     e.preventDefault();
     try {
       const res = await computeMutation.mutateAsync({
-        projectId: activeProjectId,
+        projectId: activeProjectId as number,
         roadId: compRoadId,
         boqItemId: compBoqId,
         materialId: compMaterialId,
