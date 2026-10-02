@@ -811,7 +811,7 @@ export default function DailyProgressPage() {
       </div>
 
       {/* DPR Feed / Cards */}
-      <div className="space-y-4">
+      <div className="space-y-4 overflow-auto boq-table-scroll pr-1" style={{ maxHeight: "60vh" }}>
         {dprList?.length === 0 && (
           <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400 text-xs">
             No DPR entries match the selected filters. Change road, section or clear the date filter.
