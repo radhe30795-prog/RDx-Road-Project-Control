@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { trpc } from "../lib/trpc";
 import { Link } from "wouter";
+import { useActiveProject } from "../components/ProjectContext";
 import {
   CartesianGrid,
   Legend,
@@ -61,10 +62,9 @@ function progressColor(status: string, priority: string) {
 
 export default function Dashboard() {
   const { role, roleLabel } = useRole();
-  const { data: stats, isLoading, refetch } = trpc.dashboard.getStats.useQuery();
-  const { data: projectList } = trpc.projects.list.useQuery();
-  const project = projectList?.[0];
-  const { data: activityRows, isLoading: activitiesLoading } = trpc.activities.list.useQuery();
+  const { projectId, activeProject: project } = useActiveProject();
+  const { data: stats, isLoading, refetch } = trpc.dashboard.getStats.useQuery({ projectId });
+  const { data: activityRows, isLoading: activitiesLoading } = trpc.activities.list.useQuery({ projectId });
   const [ganttRoadFilter, setGanttRoadFilter] = useState("all");
   const [ganttPhaseFilter, setGanttPhaseFilter] = useState("all");
   const [ganttZoom, setGanttZoom] = useState(1);
