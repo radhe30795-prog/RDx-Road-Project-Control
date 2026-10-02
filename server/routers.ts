@@ -1316,6 +1316,7 @@ export const appRouter = router({
         status: z.enum(["Draft", "Issued", "In Progress", "Completed", "Closed", "On Hold"]).optional(),
         remarks: z.string().optional(),
         termsOverride: z.string().nullable().optional(),
+        docLang: z.enum(["hi", "en"]).optional(),
       }))
       .mutation(async ({ input }) => {
         const { id, ...data } = input;
