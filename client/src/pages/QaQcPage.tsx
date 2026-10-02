@@ -207,9 +207,9 @@ export default function QaQcPage() {
 
       {/* Test Log Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-slate-100 text-slate-800 uppercase text-[11px] font-bold tracking-wider border-b border-slate-200">
+        <div className="overflow-auto boq-table-scroll" style={{ maxHeight: "60vh" }}>
+          <table className="w-full min-w-[1100px] text-left text-xs text-slate-600">
+            <thead className="bg-slate-100 sticky top-0 z-10 text-slate-800 uppercase text-[11px] font-bold tracking-wider border-b border-slate-200">
               <tr>
                 <th className="py-3 px-4">Test ID</th>
                 <th className="py-3 px-4">Date</th>
@@ -532,15 +532,27 @@ export default function QaQcPage() {
               </div>
 
               <div>
-                <label className="block font-medium text-slate-700 mb-1">Result Override (if re-test passed)</label>
+                <label className="block font-medium text-slate-700 mb-1">Test Result</label>
                 <select
                   defaultValue={selectedTest.result}
                   id="resultOverrideInput"
                   className="w-full p-2 border rounded"
                 >
-                  <option value="Failed">Keep Failed</option>
-                  <option value="Passed">Mark Passed (Re-Test Cleared)</option>
+                  <option value="Passed">Passed</option>
+                  <option value="Failed">Failed (Non-Conformance)</option>
+                  <option value="Pending">Pending (Awaiting Result)</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">QC Remarks</label>
+                <textarea
+                  rows={3}
+                  defaultValue={selectedTest.remarks || ""}
+                  id="remarksEditInput"
+                  placeholder="Testing methodology, equipment calibration status, sampling notes..."
+                  className="w-full p-2 border rounded"
+                />
               </div>
             </div>
 
@@ -556,12 +568,14 @@ export default function QaQcPage() {
                   const cStatus = (document.getElementById("correctiveStatusInput") as HTMLSelectElement).value as any;
                   const cNotes = (document.getElementById("correctiveNotesInput") as HTMLTextAreaElement).value;
                   const resOverride = (document.getElementById("resultOverrideInput") as HTMLSelectElement).value as any;
+                  const remarksEdit = (document.getElementById("remarksEditInput") as HTMLTextAreaElement).value;
 
                   updateTest.mutate({
                     id: selectedTest.id,
                     correctiveActionStatus: cStatus,
                     correctiveActionNotes: cNotes,
                     result: resOverride,
+                    remarks: remarksEdit,
                   });
                 }}
                 className="px-4 py-1.5 bg-slate-900 text-white rounded text-xs font-semibold hover:bg-slate-800"
