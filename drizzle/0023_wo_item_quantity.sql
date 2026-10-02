@@ -1,0 +1,1 @@
+ALTER TABLE `work_order_items` ADD COLUMN `quantity` DECIMAL(14,3) NOT NULL DEFAULT '1.000';
