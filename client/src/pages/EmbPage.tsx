@@ -23,6 +23,16 @@ export default function EmbPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(false);
 
+  // Edit e-MB entry states
+  const [editingEntry, setEditingEntry] = useState<any | null>(null);
+  const [editLength, setEditLength] = useState("");
+  const [editWidth, setEditWidth] = useState("");
+  const [editDepth, setEditDepth] = useState("");
+  const [editCalcQty, setEditCalcQty] = useState("");
+  const [editRate, setEditRate] = useState("");
+  const [editStatus, setEditStatus] = useState("");
+  const [editRemarks, setEditRemarks] = useState("");
+
   // Form states
   const [mbNo, setMbNo] = useState("");
   const [mbDate, setMbDate] = useState(new Date().toISOString().split("T")[0]);
@@ -141,6 +151,49 @@ export default function EmbPage() {
     role === "project_manager" ||
     role === "site_engineer";
 
+  function openEditEntry(mb: any) {
+    setEditingEntry(mb);
+    setEditLength(String(mb.length || "0"));
+    setEditWidth(String(mb.width || "0"));
+    setEditDepth(String(mb.depth || "0"));
+    setEditCalcQty(String(mb.calculatedQuantity || "0"));
+    setEditRate(String(mb.rate || "0"));
+    setEditStatus(mb.status || "Draft");
+    setEditRemarks(mb.remarks || "");
+  }
+
+  // Live recompute of quantity from edited L x B x D
+  const editComputedQty = useMemo(() => {
+    const l = parseFloat(editLength || "0");
+    const w = parseFloat(editWidth || "0");
+    const d = parseFloat(editDepth || "0");
+    if (l > 0 && w > 0 && d > 0) return (l * w * d).toFixed(3);
+    if (l > 0 && w > 0 && d === 0) return (l * w).toFixed(3);
+    return l.toFixed(3);
+  }, [editLength, editWidth, editDepth]);
+
+  const handleUpdateEntry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEntry) return;
+    try {
+      await updateMbMutation.mutateAsync({
+        id: editingEntry.id,
+        length: editLength,
+        width: editWidth,
+        depth: editDepth,
+        calculatedQuantity: editCalcQty,
+        rate: editRate,
+        status: editStatus as any,
+        remarks: editRemarks || undefined,
+      });
+      toast.success(`e-MB ${editingEntry.mbNo} updated!`);
+      setEditingEntry(null);
+      refetch();
+    } catch (err: any) {
+      toast.error(err.message || "Update failed");
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -251,9 +304,9 @@ export default function EmbPage() {
 
       {/* e-MB Ledger Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-900 text-white font-semibold uppercase tracking-wider text-[10px]">
+        <div className="overflow-auto boq-table-scroll" style={{ maxHeight: "60vh" }}>
+          <table className="w-full text-left text-xs min-w-[1100px]">
+            <thead className="bg-slate-900 text-white font-semibold uppercase tracking-wider text-[10px] sticky top-0 z-10">
               <tr>
                 <th className="p-3">MB No. & Date</th>
                 <th className="p-3">Road & Chainage Stretch</th>
@@ -329,17 +382,26 @@ export default function EmbPage() {
                         </span>
                       </td>
                       <td className="p-3 text-right whitespace-nowrap">
-                        {mb.status !== "Approved" && (role === "admin" || role === "qs_billing_engineer" || role === "project_manager") ? (
+                        <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => handleApprove(mb.id)}
-                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-[10px] inline-flex items-center gap-1 shadow"
+                            onClick={() => openEditEntry(mb)}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-[10px] font-bold transition"
+                            title="Edit measurement"
                           >
-                            <CheckSquare className="w-3 h-3" />
-                            <span>Approve</span>
+                            ✏️ Edit
                           </button>
-                        ) : (
-                          <span className="text-[10px] text-slate-400 italic">Checked</span>
-                        )}
+                          {mb.status !== "Approved" && (role === "admin" || role === "qs_billing_engineer" || role === "project_manager") ? (
+                            <button
+                              onClick={() => handleApprove(mb.id)}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-[10px] inline-flex items-center gap-1 shadow"
+                            >
+                              <CheckSquare className="w-3 h-3" />
+                              <span>Approve</span>
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 italic">Checked</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -517,6 +579,125 @@ export default function EmbPage() {
                   className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold shadow disabled:opacity-50"
                 >
                   Record & Submit e-MB
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Modal: Edit e-MB Entry */}
+      {editingEntry && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                ✏️ Edit e-MB Measurement
+              </h2>
+              <button onClick={() => setEditingEntry(null)} className="text-slate-400 hover:text-slate-600 text-sm font-bold">
+                ✕
+              </button>
+            </div>
+            <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg p-3 text-amber-800">
+              <strong className="font-mono">{editingEntry.mbNo}</strong>
+              <br />
+              <span className="text-slate-600">MB Date: <strong className="font-mono">{editingEntry.mbDate}</strong></span>
+            </div>
+            <form onSubmit={handleUpdateEntry} className="space-y-3 text-xs">
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="font-bold text-slate-700">Length (m)</label>
+                  <input
+                    type="number" step="0.001"
+                    value={editLength}
+                    onChange={(e) => setEditLength(e.target.value)}
+                    className="mt-1 w-full p-2 border border-slate-200 rounded-lg bg-slate-50 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700">Width (m)</label>
+                  <input
+                    type="number" step="0.001"
+                    value={editWidth}
+                    onChange={(e) => setEditWidth(e.target.value)}
+                    className="mt-1 w-full p-2 border border-slate-200 rounded-lg bg-slate-50 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700">Depth (m)</label>
+                  <input
+                    type="number" step="0.001"
+                    value={editDepth}
+                    onChange={(e) => setEditDepth(e.target.value)}
+                    className="mt-1 w-full p-2 border border-slate-200 rounded-lg bg-slate-50 font-mono"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="font-bold text-slate-700">Calculated Quantity *</label>
+                <div className="flex gap-2 mt-1">
+                  <input
+                    type="number" step="0.001" required
+                    value={editCalcQty}
+                    onChange={(e) => setEditCalcQty(e.target.value)}
+                    className="flex-1 p-2.5 border border-emerald-200 rounded-lg bg-emerald-50 font-mono font-bold text-emerald-700"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setEditCalcQty(editComputedQty)}
+                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg font-bold text-slate-600"
+                    title="Recalculate from L × B × D"
+                  >
+                    ↺ {editComputedQty}
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700">Rate (₹)</label>
+                  <input
+                    type="number" step="0.01"
+                    value={editRate}
+                    onChange={(e) => setEditRate(e.target.value)}
+                    className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700">Status</label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value)}
+                    className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-semibold"
+                  >
+                    <option value="Draft">Draft</option>
+                    <option value="Submitted">Submitted</option>
+                    <option value="Checked">Checked</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Rejected">Rejected</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="font-bold text-slate-700">Remarks</label>
+                <textarea
+                  rows={2} value={editRemarks}
+                  onChange={(e) => setEditRemarks(e.target.value)}
+                  placeholder="Optional notes..."
+                  className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50"
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
+                <button
+                  type="button" onClick={() => setEditingEntry(null)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateMbMutation.isPending}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold shadow disabled:opacity-50"
+                >
+                  {updateMbMutation.isPending ? "Updating..." : "Update"}
                 </button>
               </div>
             </form>
