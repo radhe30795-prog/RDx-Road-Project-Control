@@ -203,10 +203,12 @@ export const appRouter = router({
         const { sql } = await import("drizzle-orm");
 
         // Chapter -> Phase mapping
+        // Note: Chapter 4 is split per-item below — GSB items -> "GSB" phase,
+        // WMM items (itemCode 4.8 / "wet mix" in description) -> "WMM" phase.
         const chapterToPhase: Record<string, string[]> = {
           "chapter 2": ["Pre-Construction"],
           "chapter 3": ["Earthwork"],
-          "chapter 4": ["GSB", "WMM", "Shoulder"],
+          "chapter 4": ["GSB"],
           "chapter 5": ["Bituminous Work"],
           "chapter 6": ["CC Pavement"],
           "chapter 7": ["Structures / CD Works"],
@@ -219,7 +221,7 @@ export const appRouter = router({
 
         // Get BOQ completion by road + chapter (value-weighted for accurate progress %)
         const boqRows = await database.select().from(boqItems);
-        // Group by roadId + chapter: sum contract value and executed value
+        // Group by roadId + chapter (+ sub-phase for Chapter 4 GSB/WMM split)
         const groups = new Map<string, { contractVal: number; execVal: number; roadId: number; phases: string[] }>();
         for (const b of boqRows) {
           const contractQty = parseFloat(String(b.contractQuantity || "0"));
@@ -227,9 +229,22 @@ export const appRouter = router({
           const rate = parseFloat(String(b.rate || "0"));
           if (contractQty <= 0 || rate <= 0) continue;
           const chapterKey = String(b.chapter || "").toLowerCase();
-          const phases = chapterToPhase[chapterKey] || [];
+          let phases = chapterToPhase[chapterKey] || [];
+          let subKey = chapterKey;
+          if (chapterKey === "chapter 4") {
+            // GSB and WMM are separate entities: route WMM items to the WMM phase
+            const code = String(b.itemCode || "");
+            const desc = String(b.description || "").toLowerCase();
+            if (code.includes("4.8") || desc.includes("wet mix")) {
+              phases = ["WMM"];
+              subKey = "chapter 4|wmm";
+            } else {
+              phases = ["GSB"];
+              subKey = "chapter 4|gsb";
+            }
+          }
           if (phases.length === 0) continue;
-          const key = `${b.roadId}|${chapterKey}`;
+          const key = `${b.roadId}|${subKey}`;
           if (!groups.has(key)) {
             groups.set(key, { contractVal: 0, execVal: 0, roadId: b.roadId as number, phases });
           }
