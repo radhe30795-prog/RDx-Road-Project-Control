@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { trpc } from "../lib/trpc";
+import { useActiveProject } from "../components/ProjectContext";
 import {
   Microscope,
   Plus,
@@ -56,13 +57,14 @@ export default function QaQcPage() {
   const [testReportReference, setTestReportReference] = useState("LAB/FDT/2026/108");
   const [remarks, setRemarks] = useState("Sand replacement method performed at site.");
 
+  const { projectId: activeProjectId } = useActiveProject();
+
   const { data: tests, isLoading, refetch } = trpc.qaQc.list.useQuery({
+    projectId: activeProjectId,
     roadId: selectedRoadId !== "All Roads" ? parseInt(selectedRoadId) : undefined,
   });
 
-  const { data: roads } = trpc.roads.list.useQuery();
-  const { data: projects } = trpc.projects.list.useQuery();
-  const activeProjectId = projects?.[0]?.id || 1;
+  const { data: roads } = trpc.roads.list.useQuery({ projectId: activeProjectId });
 
   const createTest = trpc.qaQc.create.useMutation({
     onSuccess: () => {
@@ -472,7 +474,7 @@ export default function QaQcPage() {
                   createTest.mutate({
                     testId,
                     date,
-                    projectId: activeProjectId,
+                    projectId: activeProjectId as number,
                     roadId,
                     activity,
                     testType,
