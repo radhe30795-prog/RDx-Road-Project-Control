@@ -195,48 +195,51 @@ export const appRouter = router({
           "chapter 12": ["Billing & QS"],
         };
 
-        // Get BOQ completion by road + chapter
+        // Get BOQ completion by road + chapter (value-weighted for accurate progress %)
         const boqRows = await database.select().from(boqItems);
-        // Group by roadId + chapter: track if ALL items in group are 100% complete
-        const groups = new Map<string, { total: number; complete: number; roadId: number; phases: string[] }>();
+        // Group by roadId + chapter: sum contract value and executed value
+        const groups = new Map<string, { contractVal: number; execVal: number; roadId: number; phases: string[] }>();
         for (const b of boqRows) {
           const contractQty = parseFloat(String(b.contractQuantity || "0"));
           const execQty = parseFloat(String(b.executedQuantity || "0"));
-          if (contractQty <= 0) continue;
+          const rate = parseFloat(String(b.rate || "0"));
+          if (contractQty <= 0 || rate <= 0) continue;
           const chapterKey = String(b.chapter || "").toLowerCase();
           const phases = chapterToPhase[chapterKey] || [];
           if (phases.length === 0) continue;
           const key = `${b.roadId}|${chapterKey}`;
           if (!groups.has(key)) {
-            groups.set(key, { total: 0, complete: 0, roadId: b.roadId as number, phases });
+            groups.set(key, { contractVal: 0, execVal: 0, roadId: b.roadId as number, phases });
           }
           const g = groups.get(key)!;
-          g.total++;
-          if (execQty >= contractQty) g.complete++;
+          g.contractVal += contractQty * rate;
+          g.execVal += Math.min(execQty, contractQty) * rate;
         }
 
         let updated = 0;
         const groupList = Array.from(groups.values());
-        const { and, ne } = await import("drizzle-orm");
+        const { and } = await import("drizzle-orm");
         for (const g of groupList) {
-          // Only mark complete if ALL BOQ items in this chapter+road are 100%
-          if (g.total === 0 || g.complete < g.total) continue;
+          if (g.contractVal <= 0) continue;
+          // Proportional progress: e.g. 300/500 cum = 60%
+          const pct = Math.min(100, (g.execVal / g.contractVal) * 100);
+          const pctStr = pct.toFixed(2);
+          const status = pct >= 100 ? "Complete" : pct > 0 ? "In Progress" : "Not Started";
           for (const phase of g.phases) {
             const result = await database
               .update(activities)
-              .set({ status: "Complete" as any, percentageComplete: "100.00" })
+              .set({ status: status as any, percentageComplete: pctStr })
               .where(
                 and(
                   eq(activities.roadId, g.roadId),
-                  eq(activities.phase, phase as any),
-                  ne(activities.status, "Complete" as any)
+                  eq(activities.phase, phase as any)
                 )
               );
             const affected = (result as any)[0]?.affectedRows || 0;
             updated += affected;
           }
         }
-        return { updated, message: `Marked ${updated} activities as Complete based on 100% BOQ execution.` };
+        return { updated, message: `Synced ${updated} activities with proportional BOQ progress.` };
       }),
   }),
 
