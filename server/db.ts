@@ -14,6 +14,7 @@ import {
   raBillLines, InsertRaBillLine,
   subcontractors, InsertSubcontractor,
   workOrders, InsertWorkOrder,
+  workOrderItems, InsertWorkOrderItem,
   machineryAssets, InsertMachineryAsset,
   machineryLogs, InsertMachineryLog,
   machineryCompliance, InsertMachineryCompliance,
@@ -1663,6 +1664,52 @@ export async function deleteWorkOrder(id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not connected");
   return db.delete(workOrders).where(eq(workOrders.id, id));
+}
+
+// ----------------- WORK ORDER BOQ ITEMS (Hindi WO document) -----------------
+export async function getWorkOrderItems(workOrderId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(workOrderItems)
+    .where(eq(workOrderItems.workOrderId, workOrderId))
+    .orderBy(workOrderItems.sortOrder, workOrderItems.srNo);
+}
+
+export async function createWorkOrderItem(data: InsertWorkOrderItem) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  return db.insert(workOrderItems).values(data);
+}
+
+export async function updateWorkOrderItem(id: number, data: Partial<InsertWorkOrderItem>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  return db.update(workOrderItems).set({ ...data, updatedAt: new Date() }).where(eq(workOrderItems.id, id));
+}
+
+export async function deleteWorkOrderItem(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  return db.delete(workOrderItems).where(eq(workOrderItems.id, id));
+}
+
+export async function getWorkOrderDocument(workOrderId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  const woRows = await db.select().from(workOrders).where(eq(workOrders.id, workOrderId)).limit(1);
+  if (woRows.length === 0) throw new Error("Work order not found");
+  const wo = woRows[0];
+  const subRows = await db.select().from(subcontractors).where(eq(subcontractors.id, wo.subcontractorId)).limit(1);
+  const roadRows = await db.select().from(roads).where(eq(roads.id, wo.roadId)).limit(1);
+  const projRows = await db.select().from(projects).where(eq(projects.id, wo.projectId)).limit(1);
+  const items = await getWorkOrderItems(workOrderId);
+  return {
+    wo,
+    subcontractor: subRows[0] || null,
+    road: roadRows[0] || null,
+    project: projRows[0] || null,
+    items,
+  };
 }
 
 // ----------------- PLANT, MACHINERY & FUEL LOGBOOK -----------------
