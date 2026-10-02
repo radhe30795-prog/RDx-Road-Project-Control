@@ -138,6 +138,99 @@ export const appRouter = router({
         const { id, ...data } = input;
         return db.updateBoqItem(id, data);
       }),
+    // Recalculate BOQ executed quantities from Approved e-MB entries
+    // This is idempotent and fixes any discrepancies from import issues
+    recalcBoqFromEmb: adminProcedure
+      .mutation(async () => {
+        const database = await db.getDb();
+        if (!database) throw new Error("Database not connected");
+        const { sql } = await import("drizzle-orm");
+        // Sum Approved e-MB quantities per BOQ item
+        const sums = await database.execute(sql`
+          SELECT boq_item_id as boqItemId, SUM(CAST(calculated_quantity AS DECIMAL(18,3))) as totalQty
+          FROM measurement_entries
+          WHERE status = 'Approved' AND boq_item_id IS NOT NULL
+          GROUP BY boq_item_id
+        `);
+        let updated = 0;
+        const rows = (sums as any)[0] as Array<{ boqItemId: number; totalQty: string }>;
+        for (const r of rows) {
+          const boqRows = await database.select().from(boqItems).where(eq(boqItems.id, r.boqItemId)).limit(1);
+          if (boqRows.length > 0) {
+            const boq = boqRows[0];
+            const execQty = parseFloat(r.totalQty || "0");
+            const contractQty = parseFloat(String(boq.contractQuantity || "0"));
+            const newBal = Math.max(0, contractQty - execQty).toFixed(3);
+            await database.update(boqItems).set({
+              executedQuantity: execQty.toFixed(3),
+              balanceQuantity: newBal,
+            }).where(eq(boqItems.id, r.boqItemId));
+            updated++;
+          }
+        }
+        return { updated, message: `Recalculated ${updated} BOQ items from Approved e-MB entries.` };
+      }),
+    // Sync Activities from BOQ: mark activities Complete where BOQ items are 100% executed
+    // Maps BOQ chapter -> activity phase, per road
+    syncActivitiesFromBoq: adminProcedure
+      .mutation(async () => {
+        const database = await db.getDb();
+        if (!database) throw new Error("Database not connected");
+        const { sql } = await import("drizzle-orm");
+
+        // Chapter -> Phase mapping
+        const chapterToPhase: Record<string, string[]> = {
+          "chapter 2": ["Pre-Construction"],
+          "chapter 3": ["Earthwork"],
+          "chapter 4": ["GSB", "WMM", "Shoulder"],
+          "chapter 5": ["Bituminous Work"],
+          "chapter 6": ["CC Pavement"],
+          "chapter 7": ["Structures / CD Works"],
+          "chapter 8": ["Drain & Protection"],
+          "chapter 9": ["Road Furniture"],
+          "chapter 10": ["Drain & Protection"],
+          "chapter 11": ["QA/QC"],
+          "chapter 12": ["Billing & QS"],
+        };
+
+        // Get BOQ completion by road + chapter
+        const boqRows = await database.select().from(boqItems);
+        // Group by roadId + chapter: track if ALL items in group are 100% complete
+        const groups = new Map<string, { total: number; complete: number; roadId: number; phases: string[] }>();
+        for (const b of boqRows) {
+          const contractQty = parseFloat(String(b.contractQuantity || "0"));
+          const execQty = parseFloat(String(b.executedQuantity || "0"));
+          if (contractQty <= 0) continue;
+          const chapterKey = String(b.chapter || "").toLowerCase();
+          const phases = chapterToPhase[chapterKey] || [];
+          if (phases.length === 0) continue;
+          const key = `${b.roadId}|${chapterKey}`;
+          if (!groups.has(key)) {
+            groups.set(key, { total: 0, complete: 0, roadId: b.roadId as number, phases });
+          }
+          const g = groups.get(key)!;
+          g.total++;
+          if (execQty >= contractQty) g.complete++;
+        }
+
+        let updated = 0;
+        const groupList = Array.from(groups.values());
+        for (const g of groupList) {
+          // Only mark complete if ALL BOQ items in this chapter+road are 100%
+          if (g.total === 0 || g.complete < g.total) continue;
+          for (const phase of g.phases) {
+            const result = await database.execute(sql`
+              UPDATE activities
+              SET status = 'Complete', percentage_complete = '100.00'
+              WHERE road_id = ${g.roadId} AND phase = ${phase}
+              AND status != 'Complete'
+            `);
+            const affected = (result as any)[0]?.affectedRows || 0;
+            updated += affected;
+          }
+        }
+        return { updated, message: `Marked ${updated} activities as Complete based on 100% BOQ execution.` };
+      }),
   }),
 
   // HR & PAYROLL PHASE 1: HR MASTER AND PROJECT/ROAD ASSIGNMENTS
