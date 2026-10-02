@@ -173,7 +173,7 @@ export default function TeamAdminPage() {
         ) : error ? (
           <div className="p-8 text-center text-xs text-rose-600">You do not have permission to view team users.</div>
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-slate-100 overflow-auto boq-table-scroll" style={{ maxHeight: "60vh" }}>
             {filteredUsers.map((member) => {
               const meta = roleMeta(member.role);
               const isSaving = savingUserId === member.id && setRole.isPending;
