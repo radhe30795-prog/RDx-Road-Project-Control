@@ -71,7 +71,7 @@ export const hrProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
 
-    if (!ctx.user || !["admin", "hr_payroll_manager"].includes(ctx.user.role)) {
+    if (!ctx.user || !["admin", "hr_payroll_manager", "site_coordinator"].includes(ctx.user.role)) {
       throw new TRPCError({ code: "FORBIDDEN", message: "HR & Payroll permission required" });
     }
 
