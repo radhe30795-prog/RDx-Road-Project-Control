@@ -636,7 +636,25 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         const { id, ...data } = input;
-        return db.updateActivity(id, data);
+        const result = await db.updateActivity(id, data);
+        // Auto-update road progress from activities average
+        try {
+          const database = await db.getDb();
+          if (database) {
+            const { activities: actTable, roads: roadsTable } = await import("../drizzle/schema");
+            const { eq } = await import("drizzle-orm");
+            const actRows = await database.select().from(actTable).where(eq(actTable.id, id)).limit(1);
+            if (actRows.length > 0 && actRows[0].roadId) {
+              const roadId = actRows[0].roadId as number;
+              const roadActs = await database.select().from(actTable).where(eq(actTable.roadId, roadId));
+              if (roadActs.length > 0) {
+                const avg = roadActs.reduce((s, a) => s + parseFloat(String(a.percentageComplete || 0)), 0) / roadActs.length;
+                await database.update(roadsTable).set({ progress: Math.min(100, avg).toFixed(2) }).where(eq(roadsTable.id, roadId));
+              }
+            }
+          }
+        } catch { /* road progress update is best-effort */ }
+        return result;
       }),
   }),
 
@@ -1397,6 +1415,99 @@ export const appRouter = router({
       }))
       .query(async ({ input }) => {
         return db.getSubcontractorLedger(input.subcontractorId, input.roadId, input.projectId);
+      }),
+    // ---- Subcontractor RA Bills (with retention/security deduction) ----
+    billsList: publicProcedure
+      .input(z.object({
+        workOrderId: z.number().optional(),
+        subcontractorId: z.number().optional(),
+        projectId: z.number().optional(),
+      }).nullish())
+      .query(async ({ input }) => {
+        return db.getSubcontractorBills(input?.workOrderId, input?.subcontractorId, input?.projectId);
+      }),
+    createBill: publicProcedure
+      .input(z.object({
+        projectId: z.number(),
+        workOrderId: z.number(),
+        subcontractorId: z.number(),
+        billNo: z.string(),
+        billDate: z.string(),
+        periodFrom: z.string().optional(),
+        periodTo: z.string().optional(),
+        retentionPct: z.string().default("0.00"),
+        tdsPct: z.string().default("0.00"),
+        otherDeductions: z.string().default("0.00"),
+        otherDeductionRemarks: z.string().optional(),
+        isFinalBill: z.boolean().default(false),
+        remarks: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return db.createSubcontractorBill(input);
+      }),
+    updateBill: publicProcedure
+      .input(z.object({
+        id: z.number(),
+        billNo: z.string().optional(),
+        billDate: z.string().optional(),
+        periodFrom: z.string().optional(),
+        periodTo: z.string().optional(),
+        retentionPct: z.string().optional(),
+        tdsPct: z.string().optional(),
+        otherDeductions: z.string().optional(),
+        otherDeductionRemarks: z.string().optional(),
+        isFinalBill: z.boolean().optional(),
+        status: z.enum(["Draft", "Submitted", "Approved"]).optional(),
+        remarks: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        return db.updateSubcontractorBill(id, data);
+      }),
+    deleteBill: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        return db.deleteSubcontractorBill(input.id);
+      }),
+    markBillPaid: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        return db.markSubcontractorBillPaid(input.id);
+      }),
+    billItemsList: publicProcedure
+      .input(z.object({ billId: z.number() }))
+      .query(async ({ input }) => {
+        return db.getSubcontractorBillItems(input.billId);
+      }),
+    addBillItem: publicProcedure
+      .input(z.object({
+        billId: z.number(),
+        description: z.string(),
+        unit: z.string(),
+        qty: z.string().default("0.000"),
+        rate: z.string().default("0.00"),
+        sortOrder: z.number().default(0),
+      }))
+      .mutation(async ({ input }) => {
+        return db.createSubcontractorBillItem(input);
+      }),
+    updateBillItem: publicProcedure
+      .input(z.object({
+        id: z.number(),
+        description: z.string().optional(),
+        unit: z.string().optional(),
+        qty: z.string().optional(),
+        rate: z.string().optional(),
+        sortOrder: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        return db.updateSubcontractorBillItem(id, data);
+      }),
+    deleteBillItem: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        return db.deleteSubcontractorBillItem(input.id);
       }),
   }),
 
