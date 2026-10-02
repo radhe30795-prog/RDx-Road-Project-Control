@@ -37,6 +37,32 @@ export default function SubcontractorPage() {
   const [ledgerSub, setLedgerSub] = useState<any | null>(null);
   const [ledgerRoadId, setLedgerRoadId] = useState<string>("All");
 
+  // RA Bill modal state (per work order)
+  const [billWo, setBillWo] = useState<any | null>(null); // row object {wo, road, subcontractor, items...}
+  const [billView, setBillView] = useState<"list" | "new" | number>("list"); // number = selected bill id (detail)
+  const [newBillNo, setNewBillNo] = useState("");
+  const [newBillDate, setNewBillDate] = useState("");
+  const [newPeriodFrom, setNewPeriodFrom] = useState("");
+  const [newPeriodTo, setNewPeriodTo] = useState("");
+  const [newRetentionPct, setNewRetentionPct] = useState("");
+  const [newTdsPct, setNewTdsPct] = useState("");
+  const [newOtherDed, setNewOtherDed] = useState("0.00");
+  const [newOtherDedRemarks, setNewOtherDedRemarks] = useState("");
+  const [newIsFinal, setNewIsFinal] = useState(false);
+  const [newBillRemarks, setNewBillRemarks] = useState("");
+  // Bill item form
+  const [biDesc, setBiDesc] = useState("");
+  const [biUnit, setBiUnit] = useState("Nos");
+  const [biQty, setBiQty] = useState("");
+  const [biRate, setBiRate] = useState("");
+  // Bill header edit (retention/tds/other/final)
+  const [editBillId, setEditBillId] = useState<number | null>(null);
+  const [editRetentionPct, setEditRetentionPct] = useState("");
+  const [editTdsPct, setEditTdsPct] = useState("");
+  const [editOtherDed, setEditOtherDed] = useState("");
+  const [editOtherDedRemarks, setEditOtherDedRemarks] = useState("");
+  const [editIsFinal, setEditIsFinal] = useState(false);
+
   // Work Order Edit form fields
   const [editScope, setEditScope] = useState("");
   const [editUnit, setEditUnit] = useState("");
@@ -106,6 +132,151 @@ export default function SubcontractorPage() {
   function openLedger(s: any) {
     setLedgerRoadId(selectedRoadId);
     setLedgerSub(s);
+  }
+
+  // ---- Subcontractor RA Bills ----
+  const { data: billsList, refetch: refetchBills } = trpc.subcontractors.billsList.useQuery(
+    { workOrderId: billWo?.wo?.id as number, projectId: activeProjectId },
+    { enabled: !!billWo }
+  );
+  const createBillMut = trpc.subcontractors.createBill.useMutation();
+  const updateBillMut = trpc.subcontractors.updateBill.useMutation();
+  const deleteBillMut = trpc.subcontractors.deleteBill.useMutation();
+  const markBillPaidMut = trpc.subcontractors.markBillPaid.useMutation();
+  const addBillItemMut = trpc.subcontractors.addBillItem.useMutation();
+  const deleteBillItemMut = trpc.subcontractors.deleteBillItem.useMutation();
+
+  const selectedBill = billView !== "list" && billView !== "new"
+    ? (billsList || []).find((b: any) => b.bill.id === billView) : null;
+
+  function openBills(row: any) {
+    setBillWo(row);
+    setBillView("list");
+    setEditBillId(null);
+  }
+
+  function openNewBill() {
+    const n = (billsList || []).length + 1;
+    setNewBillNo(`RA-${String(n).padStart(2, "0")}`);
+    setNewBillDate(new Date().toISOString().slice(0, 10));
+    setNewPeriodFrom("");
+    setNewPeriodTo("");
+    setNewRetentionPct("");
+    setNewTdsPct("");
+    setNewOtherDed("0.00");
+    setNewOtherDedRemarks("");
+    setNewIsFinal(false);
+    setNewBillRemarks("");
+    setBillView("new");
+  }
+
+  async function handleCreateBill(e: React.FormEvent) {
+    e.preventDefault();
+    if (!billWo) return;
+    const res: any = await createBillMut.mutateAsync({
+      projectId: activeProjectId as number,
+      workOrderId: billWo.wo.id,
+      subcontractorId: billWo.wo.subcontractorId,
+      billNo: newBillNo.trim(),
+      billDate: newBillDate,
+      periodFrom: newPeriodFrom || undefined,
+      periodTo: newPeriodTo || undefined,
+      retentionPct: newIsFinal ? "0.00" : (newRetentionPct.trim() || "0.00"),
+      tdsPct: (newTdsPct.trim() || "0.00"),
+      otherDeductions: newOtherDed || "0.00",
+      otherDeductionRemarks: newOtherDedRemarks || undefined,
+      isFinalBill: newIsFinal,
+      remarks: newBillRemarks || undefined,
+    });
+    const newId = ((res as any)?.[0]?.insertId ?? (res as any)?.insertId) as number | undefined;
+    toast.success(`Bill ${newBillNo} created! Add items now.`);
+    await refetchBills();
+    // Copy WO BOQ items automatically if the WO has any
+    const woItems: any[] = billWo.items || [];
+    if (newId && woItems.length > 0) {
+      let idx = 0;
+      for (const it of woItems) {
+        await addBillItemMut.mutateAsync({
+          billId: newId,
+          description: String(it.description || ""),
+          unit: String(it.unit || "Nos"),
+          qty: String(it.quantity ?? "1.000"),
+          rate: String(it.rate ?? "0.00"),
+          sortOrder: idx++,
+        });
+      }
+      toast.success(`${woItems.length} WO item(s) copied to bill.`);
+      await refetchBills();
+    }
+    if (newId) setBillView(newId);
+    else setBillView("list");
+  }
+
+  async function handleAddBillItem(e: React.FormEvent) {
+    e.preventDefault();
+    if (billView === "list" || billView === "new" || !selectedBill) return;
+    await addBillItemMut.mutateAsync({
+      billId: selectedBill.bill.id,
+      description: biDesc.trim(),
+      unit: biUnit,
+      qty: biQty || "0.000",
+      rate: biRate || "0.00",
+      sortOrder: (selectedBill.items || []).length,
+    });
+    setBiDesc(""); setBiUnit("Nos"); setBiQty(""); setBiRate("");
+    toast.success("Item added.");
+    refetchBills();
+  }
+
+  function openEditBillDeductions(bill: any) {
+    setEditBillId(bill.id);
+    setEditRetentionPct(String(bill.retentionPct ?? "0.00"));
+    setEditTdsPct(String(bill.tdsPct ?? "0.00"));
+    setEditOtherDed(String(bill.otherDeductions ?? "0.00"));
+    setEditOtherDedRemarks(String(bill.otherDeductionRemarks || ""));
+    setEditIsFinal(!!bill.isFinalBill);
+  }
+
+  async function handleSaveBillDeductions(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editBillId) return;
+    await updateBillMut.mutateAsync({
+      id: editBillId,
+      retentionPct: editIsFinal ? "0.00" : (editRetentionPct.trim() || "0.00"),
+      tdsPct: (editTdsPct.trim() || "0.00"),
+      otherDeductions: editOtherDed || "0.00",
+      otherDeductionRemarks: editOtherDedRemarks || undefined,
+      isFinalBill: editIsFinal,
+    });
+    setEditBillId(null);
+    toast.success("Bill deductions updated.");
+    refetchBills();
+  }
+
+  async function handleBillStatus(billId: number, status: "Submitted" | "Approved") {
+    await updateBillMut.mutateAsync({ id: billId, status });
+    toast.success(`Bill marked ${status}.`);
+    refetchBills();
+  }
+
+  async function handleMarkBillPaid(bill: any) {
+    if (!confirm(`Mark bill ${bill.billNo} as PAID? Net ₹${parseFloat(String(bill.netPayable || 0)).toLocaleString("en-IN")} will be added to WO paid amount${bill.isFinalBill ? " and held retention will be released (hold → 0)" : ""}.`)) return;
+    const res: any = await markBillPaidMut.mutateAsync({ id: bill.id });
+    toast.success(`Bill paid! ${res?.retentionReleased ? `Retention ₹${parseFloat(String(res.retentionReleased)).toLocaleString("en-IN")} released.` : ""}`);
+    refetchBills(); refetchWo();
+    if (ledgerSub) refetchLedger();
+  }
+
+  async function handleDeleteBill(bill: any) {
+    if (!confirm(`Delete bill ${bill.billNo}? This cannot be undone.`)) return;
+    try {
+      await deleteBillMut.mutateAsync({ id: bill.id });
+      toast.success("Bill deleted.");
+      setBillView("list");
+      refetchBills();
+    } catch (err: any) {
+      toast.error(err?.message || "Delete failed");
+    }
   }
 
   const createSubMutation = trpc.subcontractors.create.useMutation();
@@ -541,7 +712,7 @@ export default function SubcontractorPage() {
                       (subcontractor?.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
                       (road?.roadName || "").toLowerCase().includes(searchTerm.toLowerCase())
                   )
-                  .map(({ wo, road, subcontractor }) => {
+                  .map(({ wo, road, subcontractor, items, itemsTotal, itemsCount }) => {
                     const awarded = parseFloat(String(wo.awardedAmount || 0));
                     const paid = parseFloat(String(wo.paidAmount || 0));
                     const execQty = parseFloat(String(wo.executedQuantity || 0));
@@ -624,6 +795,13 @@ export default function SubcontractorPage() {
                                 className="px-2 py-1 bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200 rounded font-bold text-[10px]"
                               >
                                 📄 WO
+                              </button>
+                              <button
+                                onClick={() => openBills({ wo, road, subcontractor, items, itemsTotal, itemsCount })}
+                                title="RA Bills with retention"
+                                className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded font-bold text-[10px]"
+                              >
+                                🧾 RA Bill
                               </button>
                               {role === "admin" && (
                                 <button
@@ -1277,12 +1455,379 @@ export default function SubcontractorPage() {
                       </table>
                     </div>
                   </div>
+
+                  {/* RA Bills */}
+                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                    <div className="p-2.5 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-700">
+                      🧾 RA Bills ({(ledgerData.bills || []).length})
+                    </div>
+                    <div className="overflow-auto boq-table-scroll" style={{ maxHeight: "24vh" }}>
+                      <table className="w-full min-w-[720px] text-left text-xs">
+                        <thead className="sticky top-0 z-10 bg-slate-800 text-white font-semibold uppercase tracking-wider text-[10px]">
+                          <tr>
+                            <th className="p-2.5">Bill No.</th>
+                            <th className="p-2.5">WO No.</th>
+                            <th className="p-2.5">Date</th>
+                            <th className="p-2.5 text-right">Gross ₹</th>
+                            <th className="p-2.5 text-right">Retention ₹</th>
+                            <th className="p-2.5 text-right">Net ₹</th>
+                            <th className="p-2.5 text-center">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {(ledgerData.bills || []).length === 0 ? (
+                            <tr><td colSpan={7} className="p-6 text-center text-slate-400">No RA bills yet.</td></tr>
+                          ) : (
+                            (ledgerData.bills || []).map((b: any) => (
+                              <tr key={b.bill.id} className="hover:bg-slate-50">
+                                <td className="p-2.5 font-mono font-bold text-slate-900">
+                                  {b.bill.billNo}
+                                  {b.bill.isFinalBill && (
+                                    <span className="ml-1 px-1.5 py-0.5 rounded bg-violet-100 text-violet-800 text-[9px] font-bold">FINAL</span>
+                                  )}
+                                </td>
+                                <td className="p-2.5 font-mono text-slate-600">{b.wo?.workOrderNo || "—"}</td>
+                                <td className="p-2.5 font-mono text-slate-600">{b.bill.billDate}</td>
+                                <td className="p-2.5 text-right font-mono">₹{parseFloat(String(b.bill.grossAmount || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                                <td className="p-2.5 text-right font-mono text-violet-700">₹{parseFloat(String(b.bill.retentionAmount || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                                <td className="p-2.5 text-right font-mono font-bold text-emerald-700">₹{parseFloat(String(b.bill.netPayable || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                                <td className="p-2.5 text-center">
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    b.bill.status === "Paid" ? "bg-emerald-100 text-emerald-800" :
+                                    b.bill.status === "Approved" ? "bg-blue-100 text-blue-800" :
+                                    b.bill.status === "Submitted" ? "bg-amber-100 text-amber-800" :
+                                    "bg-slate-100 text-slate-600"
+                                  }`}>{b.bill.status}</span>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </>
               )}
             </div>
           </div>
         </div>
       )}
+      {/* Modal: RA Bills per Work Order (with retention/security deduction) */}
+      {billWo && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-4xl w-full shadow-2xl border border-slate-100 my-8 flex flex-col max-h-[92vh]">
+            <div className="flex items-center justify-between p-4 bg-indigo-900 text-white rounded-t-2xl shrink-0">
+              <div>
+                <h2 className="text-base font-bold flex items-center gap-2">🧾 RA Bills — {billWo.wo.workOrderNo}</h2>
+                <p className="text-[11px] text-indigo-200">{billWo.subcontractor?.name} • {billWo.road?.roadId} {billWo.road?.roadName}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {billView !== "list" && (
+                  <button onClick={() => { setBillView("list"); setEditBillId(null); }} className="px-3 py-1.5 bg-indigo-700 hover:bg-indigo-600 rounded-lg text-xs font-bold">← Bills</button>
+                )}
+                <button onClick={() => { setBillWo(null); setBillView("list"); setEditBillId(null); }} className="text-indigo-200 hover:text-white text-sm font-bold px-2">✕</button>
+              </div>
+            </div>
+
+            <div className="p-4 overflow-y-auto">
+              {/* ===== LIST ===== */}
+              {billView === "list" && (
+                <>
+                  {canEdit && (
+                    <button onClick={openNewBill} className="mb-3 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow">+ New RA Bill</button>
+                  )}
+                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                    <div className="overflow-auto boq-table-scroll" style={{ maxHeight: "56vh" }}>
+                      <table className="w-full min-w-[760px] text-left text-xs">
+                        <thead className="sticky top-0 z-10 bg-slate-800 text-white font-semibold uppercase tracking-wider text-[10px]">
+                          <tr>
+                            <th className="p-2.5">Bill No.</th>
+                            <th className="p-2.5">Date / Period</th>
+                            <th className="p-2.5 text-right">Gross ₹</th>
+                            <th className="p-2.5 text-right">Retention ₹</th>
+                            <th className="p-2.5 text-right">TDS ₹</th>
+                            <th className="p-2.5 text-right">Net ₹</th>
+                            <th className="p-2.5 text-center">Status</th>
+                            <th className="p-2.5 text-right">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {!(billsList || []).length ? (
+                            <tr><td colSpan={8} className="p-6 text-center text-slate-400">No bills yet — create the first RA bill.</td></tr>
+                          ) : (billsList || []).map((b: any) => (
+                            <tr key={b.bill.id} className="hover:bg-slate-50">
+                              <td className="p-2.5 font-mono font-bold text-slate-900">
+                                {b.bill.billNo}
+                                {b.bill.isFinalBill && <span className="ml-1 px-1.5 py-0.5 rounded bg-violet-100 text-violet-800 text-[9px] font-bold">FINAL</span>}
+                              </td>
+                              <td className="p-2.5 font-mono text-slate-600 text-[11px]">{b.bill.billDate}{b.bill.periodFrom ? <span className="block text-slate-400">{b.bill.periodFrom} → {b.bill.periodTo}</span> : null}</td>
+                              <td className="p-2.5 text-right font-mono">₹{parseFloat(String(b.bill.grossAmount || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                              <td className="p-2.5 text-right font-mono text-violet-700">₹{parseFloat(String(b.bill.retentionAmount || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                              <td className="p-2.5 text-right font-mono text-slate-600">₹{parseFloat(String(b.bill.tdsAmount || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                              <td className="p-2.5 text-right font-mono font-bold text-emerald-700">₹{parseFloat(String(b.bill.netPayable || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                              <td className="p-2.5 text-center">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  b.bill.status === "Paid" ? "bg-emerald-100 text-emerald-800" :
+                                  b.bill.status === "Approved" ? "bg-blue-100 text-blue-800" :
+                                  b.bill.status === "Submitted" ? "bg-amber-100 text-amber-800" :
+                                  "bg-slate-100 text-slate-600"
+                                }`}>{b.bill.status}</span>
+                              </td>
+                              <td className="p-2.5 text-right whitespace-nowrap">
+                                <button onClick={() => { setBillView(b.bill.id); setEditBillId(null); }} className="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded font-bold text-[10px]">Open</button>
+                                {role === "admin" && b.bill.status !== "Paid" && (
+                                  <button onClick={() => handleDeleteBill(b.bill)} className="ml-1 px-2 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded font-bold text-[10px]">🗑️</button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* ===== NEW BILL ===== */}
+              {billView === "new" && (
+                <form onSubmit={handleCreateBill} className="space-y-3 text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className="font-bold text-slate-700">Bill No. *</label>
+                      <input value={newBillNo} onChange={(e) => setNewBillNo(e.target.value)} required className="mt-1 w-full p-2 border border-slate-200 rounded-lg font-mono font-bold" />
+                    </div>
+                    <div>
+                      <label className="font-bold text-slate-700">Bill Date *</label>
+                      <input type="date" value={newBillDate} onChange={(e) => setNewBillDate(e.target.value)} required className="mt-1 w-full p-2 border border-slate-200 rounded-lg" />
+                    </div>
+                    <div>
+                      <label className="font-bold text-slate-700">Period From</label>
+                      <input type="date" value={newPeriodFrom} onChange={(e) => setNewPeriodFrom(e.target.value)} className="mt-1 w-full p-2 border border-slate-200 rounded-lg" />
+                    </div>
+                    <div>
+                      <label className="font-bold text-slate-700">Period To</label>
+                      <input type="date" value={newPeriodTo} onChange={(e) => setNewPeriodTo(e.target.value)} className="mt-1 w-full p-2 border border-slate-200 rounded-lg" />
+                    </div>
+                    <div>
+                      <label className="font-bold text-slate-700">Retention % *</label>
+                      <input type="number" step="0.01" value={newRetentionPct} onChange={(e) => setNewRetentionPct(e.target.value)} placeholder="e.g. 15" disabled={newIsFinal} className="mt-1 w-full p-2 border border-violet-200 rounded-lg bg-violet-50 font-mono font-bold text-violet-800 disabled:opacity-50" />
+                    </div>
+                    <div>
+                      <label className="font-bold text-slate-700">TDS %</label>
+                      <input type="number" step="0.01" value={newTdsPct} onChange={(e) => setNewTdsPct(e.target.value)} placeholder="e.g. 2" className="mt-1 w-full p-2 border border-slate-200 rounded-lg font-mono" />
+                    </div>
+                    <div>
+                      <label className="font-bold text-slate-700">Other Deductions ₹</label>
+                      <input type="number" step="0.01" value={newOtherDed} onChange={(e) => setNewOtherDed(e.target.value)} className="mt-1 w-full p-2 border border-slate-200 rounded-lg font-mono" />
+                    </div>
+                    <div className="flex items-end pb-2">
+                      <label className="flex items-center gap-2 font-bold text-violet-800 cursor-pointer">
+                        <input type="checkbox" checked={newIsFinal} onChange={(e) => setNewIsFinal(e.target.checked)} className="w-4 h-4 accent-violet-600" />
+                        Final Bill (retention → 0)
+                      </label>
+                    </div>
+                  </div>
+                  {newIsFinal && (
+                    <p className="text-[11px] bg-violet-50 border border-violet-200 text-violet-800 rounded-lg p-2 font-semibold">
+                      Final bill: retention deduction will be 0 and previously held retention will be released (hold → 0) when marked Paid.
+                    </p>
+                  )}
+                  <div>
+                    <label className="font-bold text-slate-700">Other Deduction Remarks</label>
+                    <input value={newOtherDedRemarks} onChange={(e) => setNewOtherDedRemarks(e.target.value)} placeholder="e.g. material issued recovery" className="mt-1 w-full p-2 border border-slate-200 rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700">Remarks</label>
+                    <input value={newBillRemarks} onChange={(e) => setNewBillRemarks(e.target.value)} className="mt-1 w-full p-2 border border-slate-200 rounded-lg" />
+                  </div>
+                  {(billWo.items || []).length > 0 && (
+                    <p className="text-[11px] text-slate-500">📋 {billWo.items.length} WO BOQ item(s) will be auto-copied into this bill. You can edit them after creation.</p>
+                  )}
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button type="button" onClick={() => setBillView("list")} className="px-4 py-2 border border-slate-200 rounded-lg font-bold text-slate-600">Cancel</button>
+                    <button type="submit" disabled={createBillMut.isPending} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow disabled:opacity-50">
+                      {createBillMut.isPending ? "Creating..." : "Create Bill"}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* ===== BILL DETAIL ===== */}
+              {selectedBill && (
+                <BillDetail
+                  billRow={selectedBill}
+                  canEdit={canEdit}
+                  isAdmin={role === "admin"}
+                  biDesc={biDesc} setBiDesc={setBiDesc}
+                  biUnit={biUnit} setBiUnit={setBiUnit}
+                  biQty={biQty} setBiQty={setBiQty}
+                  biRate={biRate} setBiRate={setBiRate}
+                  onAddItem={handleAddBillItem}
+                  addingItem={addBillItemMut.isPending}
+                  onDeleteItem={async (id: number) => { await deleteBillItemMut.mutateAsync({ id }); toast.success("Item removed."); refetchBills(); }}
+                  editBillId={editBillId}
+                  onOpenEditDeductions={() => openEditBillDeductions(selectedBill.bill)}
+                  onCloseEditDeductions={() => setEditBillId(null)}
+                  editRetentionPct={editRetentionPct} setEditRetentionPct={setEditRetentionPct}
+                  editTdsPct={editTdsPct} setEditTdsPct={setEditTdsPct}
+                  editOtherDed={editOtherDed} setEditOtherDed={setEditOtherDed}
+                  editOtherDedRemarks={editOtherDedRemarks} setEditOtherDedRemarks={setEditOtherDedRemarks}
+                  editIsFinal={editIsFinal} setEditIsFinal={setEditIsFinal}
+                  onSaveDeductions={handleSaveBillDeductions}
+                  savingDeductions={updateBillMut.isPending}
+                  onStatus={(s: "Submitted" | "Approved") => handleBillStatus(selectedBill.bill.id, s)}
+                  onMarkPaid={() => handleMarkBillPaid(selectedBill.bill)}
+                  markingPaid={markBillPaidMut.isPending}
+                  onDelete={() => handleDeleteBill(selectedBill.bill)}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Bill detail sub-component: items + deduction breakdown + status workflow */
+function BillDetail(props: any) {
+  const { billRow, canEdit, isAdmin } = props;
+  const bill = billRow.bill;
+  const items = billRow.items || [];
+  const gross = parseFloat(String(bill.grossAmount || 0));
+  const retention = parseFloat(String(bill.retentionAmount || 0));
+  const tds = parseFloat(String(bill.tdsAmount || 0));
+  const other = parseFloat(String(bill.otherDeductions || 0));
+  const net = parseFloat(String(bill.netPayable || 0));
+  const inr = (v: number) => `₹${v.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+  return (
+    <div className="space-y-4 text-xs">
+      <div className="flex flex-wrap items-center gap-2 justify-between bg-slate-50 border border-slate-200 rounded-xl p-3">
+        <div>
+          <span className="font-mono font-bold text-slate-900 text-sm">{bill.billNo}</span>
+          {bill.isFinalBill && <span className="ml-2 px-2 py-0.5 rounded bg-violet-100 text-violet-800 text-[10px] font-bold">FINAL BILL</span>}
+          <span className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+            bill.status === "Paid" ? "bg-emerald-100 text-emerald-800" :
+            bill.status === "Approved" ? "bg-blue-100 text-blue-800" :
+            bill.status === "Submitted" ? "bg-amber-100 text-amber-800" : "bg-slate-200 text-slate-700"
+          }`}>{bill.status}</span>
+          <p className="text-[11px] text-slate-500 mt-1 font-mono">{bill.billDate}{bill.periodFrom ? ` • ${bill.periodFrom} → ${bill.periodTo}` : ""}</p>
+        </div>
+        {canEdit && bill.status !== "Paid" && (
+          <div className="flex flex-wrap gap-1.5">
+            {bill.status === "Draft" && (
+              <button onClick={() => props.onStatus("Submitted")} className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold">Submit →</button>
+            )}
+            {bill.status === "Submitted" && (
+              <button onClick={() => props.onStatus("Approved")} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold">Approve ✓</button>
+            )}
+            {(bill.status === "Approved" || bill.status === "Submitted" || bill.status === "Draft") && (
+              <button onClick={props.onMarkPaid} disabled={props.markingPaid} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold disabled:opacity-50">
+                {props.markingPaid ? "Paying..." : "💰 Mark Paid"}
+              </button>
+            )}
+            {isAdmin && (
+              <button onClick={props.onDelete} className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg font-bold">🗑️</button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Items */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="p-2.5 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-700">Bill Items ({items.length})</div>
+        <table className="w-full text-left text-xs">
+          <thead className="bg-slate-100 text-slate-600 uppercase text-[10px]">
+            <tr>
+              <th className="p-2 w-10">#</th>
+              <th className="p-2">Description</th>
+              <th className="p-2 w-20">Unit</th>
+              <th className="p-2 w-24 text-right">Qty</th>
+              <th className="p-2 w-28 text-right">Rate ₹</th>
+              <th className="p-2 w-32 text-right">Amount ₹</th>
+              {canEdit && bill.status !== "Paid" && <th className="p-2 w-14"></th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {items.length === 0 ? (
+              <tr><td colSpan={7} className="p-4 text-center text-slate-400">No items — add below.</td></tr>
+            ) : items.map((it: any, i: number) => (
+              <tr key={it.id} className="hover:bg-slate-50">
+                <td className="p-2 font-bold text-slate-500">{i + 1}</td>
+                <td className="p-2 font-medium text-slate-800">{it.description}</td>
+                <td className="p-2 text-slate-500">{it.unit}</td>
+                <td className="p-2 text-right font-mono">{parseFloat(String(it.qty || 0)).toLocaleString("en-IN")}</td>
+                <td className="p-2 text-right font-mono">{inr(parseFloat(String(it.rate || 0)))}</td>
+                <td className="p-2 text-right font-mono font-bold">{inr(parseFloat(String(it.amount || 0)))}</td>
+                {canEdit && bill.status !== "Paid" && (
+                  <td className="p-2 text-right">
+                    <button onClick={() => props.onDeleteItem(it.id)} className="px-1.5 py-0.5 bg-red-50 text-red-600 rounded font-bold">✕</button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {canEdit && bill.status !== "Paid" && (
+          <form onSubmit={props.onAddItem} className="grid grid-cols-12 gap-2 p-3 bg-amber-50/60 border-t border-slate-200">
+            <input value={props.biDesc} onChange={(e) => props.setBiDesc(e.target.value)} placeholder="Description *" required className="col-span-5 p-2 border border-slate-200 rounded-lg" />
+            <input value={props.biUnit} onChange={(e) => props.setBiUnit(e.target.value)} placeholder="Unit" className="col-span-2 p-2 border border-slate-200 rounded-lg" />
+            <input value={props.biQty} onChange={(e) => props.setBiQty(e.target.value)} placeholder="Qty" type="number" step="0.001" className="col-span-2 p-2 border border-slate-200 rounded-lg font-mono" />
+            <input value={props.biRate} onChange={(e) => props.setBiRate(e.target.value)} placeholder="Rate ₹" type="number" step="0.01" className="col-span-2 p-2 border border-slate-200 rounded-lg font-mono" />
+            <button disabled={props.addingItem} className="col-span-1 px-2 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold disabled:opacity-50">+</button>
+          </form>
+        )}
+      </div>
+
+      {/* Deduction breakdown */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="p-2.5 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-700 flex items-center justify-between">
+          <span>Deduction Breakup</span>
+          {canEdit && bill.status !== "Paid" && props.editBillId !== bill.id && (
+            <button onClick={props.onOpenEditDeductions} className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded font-bold text-[10px]">✏️ Edit %</button>
+          )}
+        </div>
+        {props.editBillId === bill.id ? (
+          <form onSubmit={props.onSaveDeductions} className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="font-bold text-slate-700">Retention %</label>
+              <input type="number" step="0.01" value={props.editRetentionPct} onChange={(e) => props.setEditRetentionPct(e.target.value)} placeholder="e.g. 15" disabled={props.editIsFinal} className="mt-1 w-full p-2 border border-violet-200 rounded-lg bg-violet-50 font-mono font-bold text-violet-800 disabled:opacity-50" />
+            </div>
+            <div>
+              <label className="font-bold text-slate-700">TDS %</label>
+              <input type="number" step="0.01" value={props.editTdsPct} onChange={(e) => props.setEditTdsPct(e.target.value)} placeholder="e.g. 2" className="mt-1 w-full p-2 border border-slate-200 rounded-lg font-mono" />
+            </div>
+            <div>
+              <label className="font-bold text-slate-700">Other ₹</label>
+              <input type="number" step="0.01" value={props.editOtherDed} onChange={(e) => props.setEditOtherDed(e.target.value)} className="mt-1 w-full p-2 border border-slate-200 rounded-lg font-mono" />
+            </div>
+            <div className="col-span-2">
+              <label className="font-bold text-slate-700">Other Remarks</label>
+              <input value={props.editOtherDedRemarks} onChange={(e) => props.setEditOtherDedRemarks(e.target.value)} className="mt-1 w-full p-2 border border-slate-200 rounded-lg" />
+            </div>
+            <div className="flex items-end pb-1">
+              <label className="flex items-center gap-2 font-bold text-violet-800 cursor-pointer">
+                <input type="checkbox" checked={props.editIsFinal} onChange={(e) => props.setEditIsFinal(e.target.checked)} className="w-4 h-4 accent-violet-600" />
+                Final Bill (retention → 0)
+              </label>
+            </div>
+            <div className="col-span-2 sm:col-span-3 flex justify-end gap-2">
+              <button type="button" onClick={props.onCloseEditDeductions} className="px-4 py-2 border border-slate-200 rounded-lg font-bold text-slate-600">Cancel</button>
+              <button type="submit" disabled={props.savingDeductions} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold disabled:opacity-50">Save</button>
+            </div>
+          </form>
+        ) : (
+          <div className="p-3 space-y-1.5 font-mono">
+            <div className="flex justify-between"><span className="text-slate-600">Gross Amount</span><span className="font-bold">{inr(gross)}</span></div>
+            <div className="flex justify-between"><span className="text-violet-700">(-) Retention {bill.isFinalBill ? "(FINAL → 0)" : `(${parseFloat(String(bill.retentionPct || 0))}%)`}</span><span className="font-bold text-violet-700">{inr(retention)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">(-) TDS ({parseFloat(String(bill.tdsPct || 0))}%)</span><span>{inr(tds)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">(-) Other {bill.otherDeductionRemarks ? <span className="text-[10px] text-slate-400">({bill.otherDeductionRemarks})</span> : null}</span><span>{inr(other)}</span></div>
+            <div className="flex justify-between border-t border-slate-200 pt-2 text-sm"><span className="font-bold text-slate-800">= Net Payable</span><span className="font-bold text-emerald-700">{inr(net)}</span></div>
+            {bill.isFinalBill && <p className="text-[11px] text-violet-700 font-sans font-semibold pt-1">Final bill — retention released, hold → 0 on payment.</p>}
+          </div>
+        )}
+      </div>
+      {bill.remarks && <p className="text-[11px] text-slate-500"><strong>Remarks:</strong> {bill.remarks}</p>}
     </div>
   );
 }
