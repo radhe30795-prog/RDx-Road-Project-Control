@@ -5,6 +5,7 @@ import { adminProcedure, hrProcedure, publicProcedure, protectedProcedure, roleP
 import { COMMERCIAL_ROLES, isCommercialRole } from "@shared/roles";
 import { z } from "zod";
 import * as db from "./db";
+import * as billingDb from "./subcontractorBilling";
 import { TRPCError } from "@trpc/server";
 import { importHrEmployees, importWorkbook, WorkbookRows } from "./imports";
 import { clearDemoProjectData } from "./clearDemo";
@@ -1443,7 +1444,7 @@ export const appRouter = router({
         remarks: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
-        return db.createSubcontractorBill(input);
+        return billingDb.createSubcontractorBill(input);
       }),
     updateBill: publicProcedure
       .input(z.object({
@@ -1462,17 +1463,17 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         const { id, ...data } = input;
-        return db.updateSubcontractorBill(id, data);
+        return billingDb.updateSubcontractorBill(id, data);
       }),
     deleteBill: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
-        return db.deleteSubcontractorBill(input.id);
+        return billingDb.deleteSubcontractorBill(input.id);
       }),
     markBillPaid: publicProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
-        return db.markSubcontractorBillPaid(input.id);
+        return billingDb.markSubcontractorBillPaid(input.id);
       }),
     billItemsList: publicProcedure
       .input(z.object({ billId: z.number() }))
@@ -1489,7 +1490,7 @@ export const appRouter = router({
         sortOrder: z.number().default(0),
       }))
       .mutation(async ({ input }) => {
-        return db.createSubcontractorBillItem(input);
+        return billingDb.createSubcontractorBillItem(input);
       }),
     updateBillItem: publicProcedure
       .input(z.object({
@@ -1502,12 +1503,12 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         const { id, ...data } = input;
-        return db.updateSubcontractorBillItem(id, data);
+        return billingDb.updateSubcontractorBillItem(id, data);
       }),
     deleteBillItem: publicProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
-        return db.deleteSubcontractorBillItem(input.id);
+        return billingDb.deleteSubcontractorBillItem(input.id);
       }),
   }),
 
