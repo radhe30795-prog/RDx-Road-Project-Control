@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Link } from "wouter";
 import { trpc } from "../lib/trpc";
+import { useActiveProject } from "../components/ProjectContext";
 import {
   TrendingUp,
   Plus,
@@ -214,19 +215,20 @@ export default function DailyProgressPage() {
   const [isPreparingPhoto, setIsPreparingPhoto] = useState(false);
   const dprPhotoInputRef = useRef<HTMLInputElement>(null);
 
+  const { projectId: activeProjectId } = useActiveProject();
+
   const { data: dprList, isLoading, refetch } = trpc.dailyProgress.list.useQuery({
+    projectId: activeProjectId,
     roadId: selectedRoadId !== "All Roads" ? parseInt(selectedRoadId) : undefined,
     date: filterDate || undefined,
     sectionType: selectedSectionType !== "All Sections" ? (selectedSectionType as any) : undefined,
   });
 
-  const { data: roads } = trpc.roads.list.useQuery();
+  const { data: roads } = trpc.roads.list.useQuery({ projectId: activeProjectId });
   const { data: activities } = trpc.activities.list.useQuery({ roadId });
-  const { data: projects } = trpc.projects.list.useQuery();
-  const activeProjectId = projects?.[0]?.id || 1;
   const { data: boqData } = trpc.boq.list.useQuery({ roadId });
-  const { data: inventoryData } = trpc.inventory.list.useQuery();
-  const { data: machineryAssetsData } = trpc.machinery.assetsList.useQuery();
+  const { data: inventoryData } = trpc.inventory.list.useQuery({ projectId: activeProjectId });
+  const { data: machineryAssetsData } = trpc.machinery.assetsList.useQuery({ projectId: activeProjectId });
   // assetsList returns joined { asset, road } rows — flatten to plain assets
   const machineryAssets = (machineryAssetsData || []).map((row) => row.asset);
   const availableRoads = roads ?? cachedRoads;
@@ -479,7 +481,7 @@ export default function DailyProgressPage() {
     const payload = {
       clientDraftId: `dpr_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
       date,
-      projectId: activeProjectId,
+      projectId: activeProjectId as number,
       roadId,
       // Material / Machine entries are standalone registers — no activity linkage by default
       activityId: activityId || undefined,
