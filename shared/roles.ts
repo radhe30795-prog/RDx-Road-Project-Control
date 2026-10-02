@@ -53,6 +53,7 @@ export const ROLE_PAGES: Record<AppRole, string[]> = {
     "/reports",
     "/billing",
     "/rate-analysis",
+    "/projection",
     "/hindrances",
     "/qa-qc",
     "/materials",
@@ -72,6 +73,7 @@ export const ROLE_PAGES: Record<AppRole, string[]> = {
     "/reports",
     "/billing",
     "/rate-analysis",
+    "/projection",
     "/documents",
   ],
 
