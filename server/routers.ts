@@ -662,14 +662,20 @@ export const appRouter = router({
         const { id, ...data } = input;
         return db.updateMeasurement(id, data);
       }),
-    // Temporary cleanup: delete wrong RA-01-* e-MB entries (10x wrong amounts)
-    // Only deletes entries with mbNo starting with 'RA-01-' (the bad import)
-    // Safe: RA-02-* (correct) entries are NOT touched
+    // Temporary cleanup: delete wrong e-MB entries (10x wrong amounts from bad 105-row import)
+    // Deletes: RA-01-* (83 rows) AND RA-02-L* (22 rows with road codes like RA-02-L031-001)
+    // Safe: RA-02-001 to RA-02-021 (correct, just numbers) are NOT touched
     cleanupWrongRa01: roleProcedure(["admin"])
       .mutation(async () => {
         const database = await db.getDb();
         if (!database) throw new Error("Database not connected");
-        const wrongEntries = await database.select().from(measurementEntries).where(like(measurementEntries.mbNo, "RA-01-%"));
+        const { or } = await import("drizzle-orm");
+        const wrongEntries = await database.select().from(measurementEntries).where(
+          or(
+            like(measurementEntries.mbNo, "RA-01-%"),
+            like(measurementEntries.mbNo, "RA-02-L%")
+          )
+        );
         let deletedCount = 0;
         let boqReversed = 0;
         for (const entry of wrongEntries) {
@@ -687,7 +693,7 @@ export const appRouter = router({
           await database.delete(measurementEntries).where(eq(measurementEntries.id, entry.id));
           deletedCount++;
         }
-        return { deletedCount, boqReversed, message: `Deleted ${deletedCount} wrong RA-01 entries, reversed BOQ for ${boqReversed}` };
+        return { deletedCount, boqReversed, message: `Deleted ${deletedCount} wrong entries (RA-01-* and RA-02-L*), reversed BOQ for ${boqReversed}` };
       }),
   }),
 
