@@ -663,7 +663,7 @@ export const appRouter = router({
         return db.updateMeasurement(id, data);
       }),
     // Temporary cleanup: delete wrong e-MB entries from bad 105-row import
-    // Deletes: RA-01-* (82 rows) AND ALL RA-02-* (to remove wrong ones, then re-import correct)
+    // Deletes: RA-01-*, RA-02-*, AND exact RA-01, RA-02 (without suffix)
     // After cleanup, re-import the verified 21-row file (RA-02-001 to RA-02-021)
     cleanupWrongRa01: roleProcedure(["admin"])
       .mutation(async () => {
@@ -672,8 +672,8 @@ export const appRouter = router({
         const { or } = await import("drizzle-orm");
         const wrongEntries = await database.select().from(measurementEntries).where(
           or(
-            like(measurementEntries.mbNo, "RA-01-%"),
-            like(measurementEntries.mbNo, "RA-02-%")
+            like(measurementEntries.mbNo, "RA-01%"),
+            like(measurementEntries.mbNo, "RA-02%")
           )
         );
         let deletedCount = 0;
