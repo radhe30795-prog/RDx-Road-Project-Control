@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useRole } from "../components/AppLayout";
+import { useActiveProject } from "../components/ProjectContext";
 
 export default function SubcontractorPage() {
   const { role } = useRole();
@@ -42,11 +43,11 @@ export default function SubcontractorPage() {
   const [startDate, setStartDate] = useState("2026-09-01");
   const [targetDate, setTargetDate] = useState("2026-11-30");
 
-  const { data: projects } = trpc.projects.list.useQuery();
-  const activeProjectId = projects?.[0]?.id || 1;
-  const { data: roads } = trpc.roads.list.useQuery();
-  const { data: subsList, refetch: refetchSubs } = trpc.subcontractors.list.useQuery();
+  const { projectId: activeProjectId } = useActiveProject();
+  const { data: roads } = trpc.roads.list.useQuery({ projectId: activeProjectId });
+  const { data: subsList, refetch: refetchSubs } = trpc.subcontractors.list.useQuery({ projectId: activeProjectId });
   const { data: woList, isLoading, refetch: refetchWo } = trpc.subcontractors.workOrdersList.useQuery({
+    projectId: activeProjectId,
     roadId: selectedRoadId !== "All" ? parseInt(selectedRoadId) : undefined,
   });
 
@@ -60,7 +61,7 @@ export default function SubcontractorPage() {
       const code = subCode.trim() || `SUB-${Date.now().toString().slice(-4)}`;
       await createSubMutation.mutateAsync({
         subcontractorCode: code,
-        projectId: activeProjectId,
+        projectId: activeProjectId as number,
         name: subName.trim(),
         workCategory,
         contactPerson: contactPerson.trim() || undefined,
@@ -82,7 +83,7 @@ export default function SubcontractorPage() {
       const orderNo = woNo.trim() || `WO-2026-${Date.now().toString().slice(-4)}`;
       await createWoMutation.mutateAsync({
         workOrderNo: orderNo,
-        projectId: activeProjectId,
+        projectId: activeProjectId as number,
         roadId: woRoadId,
         subcontractorId: woSubId,
         scope: scope.trim(),
