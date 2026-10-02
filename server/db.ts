@@ -219,7 +219,7 @@ export async function getAdminCount() {
   return Number(result[0]?.count ?? 0);
 }
 
-export async function updateUserRole(id: number, role: "user" | "admin" | "project_manager" | "qs_billing_engineer" | "site_engineer" | "qa_qc_engineer" | "hr_payroll_manager") {
+export async function updateUserRole(id: number, role: "user" | "admin" | "project_manager" | "qs_billing_engineer" | "site_engineer" | "qa_qc_engineer" | "hr_payroll_manager" | "site_coordinator") {
   const db = await getDb();
   if (!db) throw new Error("Database not connected");
   return db.update(users).set({ role, updatedAt: new Date() }).where(eq(users.id, id));
