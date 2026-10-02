@@ -431,7 +431,7 @@ export async function updateActivity(id: number, data: Partial<InsertActivity>) 
 }
 
 // ----------------- DAILY PROGRESS -----------------
-export async function getDailyProgressList(params?: { roadId?: number; date?: string; sectionType?: string }) {
+export async function getDailyProgressList(params?: { roadId?: number; date?: string; sectionType?: string; projectId?: number }) {
   const db = await getDb();
   if (!db) return [];
   const rows = await db.select({
@@ -453,6 +453,7 @@ export async function getDailyProgressList(params?: { roadId?: number; date?: st
     if (params?.roadId && r.dp.roadId !== params.roadId) return false;
     if (params?.date && r.dp.date !== params.date) return false;
     if (params?.sectionType && r.dp.sectionType !== params.sectionType) return false;
+    if (params?.projectId && r.dp.projectId !== params.projectId) return false;
     return true;
   });
 }
@@ -856,7 +857,7 @@ export async function createGrn(data: InsertGrnEntry) {
 }
 
 // ----------------- MATERIAL ISSUES / CONSUMPTION -----------------
-export async function getMaterialIssuesList(roadId?: number) {
+export async function getMaterialIssuesList(roadId?: number, projectId?: number) {
   const db = await getDb();
   if (!db) return [];
   const rows = await db.select({
@@ -870,8 +871,11 @@ export async function getMaterialIssuesList(roadId?: number) {
     .leftJoin(boqItems, eq(materialIssues.boqItemId, boqItems.id))
     .orderBy(desc(materialIssues.issueDate), desc(materialIssues.id));
 
-  if (roadId) return rows.filter((r) => r.issue.roadId === roadId);
-  return rows;
+  return rows.filter((r) => {
+    if (roadId && r.issue.roadId !== roadId) return false;
+    if (projectId && r.issue.projectId !== projectId) return false;
+    return true;
+  });
 }
 
 export async function createMaterialIssue(data: InsertMaterialIssue) {
@@ -1025,7 +1029,7 @@ export async function updateMeasurement(id: number, data: Partial<InsertMeasurem
 }
 
 // ----------------- MATERIAL WASTAGE & VARIANCE AUDIT -----------------
-export async function getMaterialVariances(roadId?: number) {
+export async function getMaterialVariances(roadId?: number, projectId?: number) {
   const db = await getDb();
   if (!db) return [];
   const rows = await db.select({
@@ -1039,8 +1043,11 @@ export async function getMaterialVariances(roadId?: number) {
     .leftJoin(materialInventory, eq(materialVariances.materialId, materialInventory.id))
     .orderBy(desc(materialVariances.id));
 
-  if (roadId) return rows.filter((r) => r.variance.roadId === roadId);
-  return rows;
+  return rows.filter((r) => {
+    if (roadId && r.variance.roadId !== roadId) return false;
+    if (projectId && r.variance.projectId !== projectId) return false;
+    return true;
+  });
 }
 
 export async function computeMaterialVarianceReport(params: {
@@ -1296,7 +1303,7 @@ export async function updateBill(id: number, data: Partial<InsertBilling>) {
 }
 
 // ----------------- HINDRANCES -----------------
-export async function getHindrances(roadId?: number) {
+export async function getHindrances(roadId?: number, projectId?: number) {
   const db = await getDb();
   if (!db) return [];
   await runHindrancePendingUpdate();
@@ -1308,10 +1315,11 @@ export async function getHindrances(roadId?: number) {
     .leftJoin(roads, eq(hindrances.roadId, roads.id))
     .orderBy(desc(hindrances.id));
 
-  if (roadId) {
-    return rows.filter(r => r.hindrance.roadId === roadId);
-  }
-  return rows;
+  return rows.filter((r) => {
+    if (roadId && r.hindrance.roadId !== roadId) return false;
+    if (projectId && r.hindrance.projectId !== projectId) return false;
+    return true;
+  });
 }
 
 export async function createHindrance(data: Omit<InsertHindrance, "hindranceId" | "daysPending"> & { hindranceId?: string }) {
@@ -1349,7 +1357,7 @@ export async function updateHindrance(id: number, data: Partial<InsertHindrance>
 }
 
 // ----------------- QA/QC TESTS -----------------
-export async function getQaQcTests(roadId?: number) {
+export async function getQaQcTests(roadId?: number, projectId?: number) {
   const db = await getDb();
   if (!db) return [];
   const rows = await db.select({
@@ -1359,10 +1367,11 @@ export async function getQaQcTests(roadId?: number) {
     .leftJoin(roads, eq(qaQcTests.roadId, roads.id))
     .orderBy(desc(qaQcTests.date), desc(qaQcTests.id));
 
-  if (roadId) {
-    return rows.filter(r => r.test.roadId === roadId);
-  }
-  return rows;
+  return rows.filter((r) => {
+    if (roadId && r.test.roadId !== roadId) return false;
+    if (projectId && r.test.projectId !== projectId) return false;
+    return true;
+  });
 }
 
 export async function createQaQcTest(data: InsertQaQcTest) {
@@ -1458,7 +1467,7 @@ export async function updateMaterial(id: number, data: Partial<InsertMaterial>) 
 }
 
 // ----------------- DOCUMENTS -----------------
-export async function getDocuments(category?: string) {
+export async function getDocuments(category?: string, projectId?: number) {
   const db = await getDb();
   if (!db) return [];
   const rows = await db.select({
@@ -1468,10 +1477,11 @@ export async function getDocuments(category?: string) {
     .leftJoin(roads, eq(documents.roadId, roads.id))
     .orderBy(desc(documents.date), desc(documents.id));
 
-  if (category) {
-    return rows.filter(r => r.doc.category === category);
-  }
-  return rows;
+  return rows.filter((r) => {
+    if (category && r.doc.category !== category) return false;
+    if (projectId && r.doc.projectId !== projectId) return false;
+    return true;
+  });
 }
 
 export async function createDocument(data: InsertDocument) {
@@ -1594,7 +1604,7 @@ export async function createSubcontractor(data: InsertSubcontractor) {
   return db.insert(subcontractors).values(data);
 }
 
-export async function getWorkOrders(roadId?: number, subcontractorId?: number) {
+export async function getWorkOrders(roadId?: number, subcontractorId?: number, projectId?: number) {
   const db = await getDb();
   if (!db) return [];
   const rows = await db.select({
@@ -1609,6 +1619,7 @@ export async function getWorkOrders(roadId?: number, subcontractorId?: number) {
   return rows.filter((r) => {
     if (roadId && r.wo.roadId !== roadId) return false;
     if (subcontractorId && r.wo.subcontractorId !== subcontractorId) return false;
+    if (projectId && r.wo.projectId !== projectId) return false;
     return true;
   });
 }
@@ -1652,7 +1663,7 @@ export async function createMachineryAsset(data: InsertMachineryAsset) {
   return db.insert(machineryAssets).values(data);
 }
 
-export async function getMachineryLogs(roadId?: number, assetId?: number) {
+export async function getMachineryLogs(roadId?: number, assetId?: number, projectId?: number) {
   const db = await getDb();
   if (!db) return [];
   const rows = await db.select({
@@ -1667,6 +1678,7 @@ export async function getMachineryLogs(roadId?: number, assetId?: number) {
   return rows.filter((r) => {
     if (roadId && r.log.roadId !== roadId) return false;
     if (assetId && r.log.assetId !== assetId) return false;
+    if (projectId && r.log.projectId !== projectId) return false;
     return true;
   });
 }
