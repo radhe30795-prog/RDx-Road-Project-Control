@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { trpc } from "../lib/trpc";
+import { useActiveProject } from "../components/ProjectContext";
 import {
   FileSpreadsheet,
   Plus,
@@ -43,9 +44,8 @@ export default function BoqPage() {
   const [editStatus, setEditStatus] = useState("Active");
   const [editRemarks, setEditRemarks] = useState("");
 
-  const { data: projects } = trpc.projects.list.useQuery();
-  const activeProjectId = projects?.[0]?.id || 1;
-  const { data: roads } = trpc.roads.list.useQuery();
+  const { projectId: activeProjectId } = useActiveProject();
+  const { data: roads } = trpc.roads.list.useQuery({ projectId: activeProjectId });
   const { data: boqData, isLoading, refetch } = trpc.boq.list.useQuery({
     projectId: activeProjectId,
     roadId: selectedRoadId !== "All" ? parseInt(selectedRoadId) : undefined,
@@ -175,7 +175,7 @@ export default function BoqPage() {
     try {
       await createBoqMutation.mutateAsync({
         itemCode: itemCode.trim().toUpperCase(),
-        projectId: activeProjectId,
+        projectId: activeProjectId as number,
         roadId: roadId || undefined,
         chapter,
         description: description.trim(),
