@@ -540,6 +540,7 @@ export const subcontractors = mysqlTable("subcontractors", {
   contactPerson: varchar("contactPerson", { length: 150 }),
   phone: varchar("phone", { length: 40 }),
   gstin: varchar("gstin", { length: 30 }),
+  address: text("address"),
   status: mysqlEnum("status", ["Active", "On Hold", "Closed"]).default("Active").notNull(),
   remarks: text("remarks"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
