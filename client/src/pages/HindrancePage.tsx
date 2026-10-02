@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { trpc } from "../lib/trpc";
+import { useActiveProject } from "../components/ProjectContext";
 import {
   AlertTriangle,
   Plus,
@@ -60,13 +61,14 @@ export default function HindrancePage() {
   const [dueDate, setDueDate] = useState("");
   const [remarks, setRemarks] = useState("");
 
+  const { projectId: activeProjectId } = useActiveProject();
+
   const { data: hindrances, isLoading, refetch } = trpc.hindrances.list.useQuery({
+    projectId: activeProjectId,
     roadId: selectedRoadId !== "All Roads" ? parseInt(selectedRoadId) : undefined,
   });
 
-  const { data: roads } = trpc.roads.list.useQuery();
-  const { data: projects } = trpc.projects.list.useQuery();
-  const activeProjectId = projects?.[0]?.id || 1;
+  const { data: roads } = trpc.roads.list.useQuery({ projectId: activeProjectId });
 
   const createHindrance = trpc.hindrances.create.useMutation({
     onSuccess: () => {
@@ -491,7 +493,7 @@ export default function HindrancePage() {
                 disabled={!description || !rdLocation}
                 onClick={() => {
                   createHindrance.mutate({
-                    projectId: activeProjectId,
+                    projectId: activeProjectId as number,
                     roadId,
                     rdLocation,
                     category,
