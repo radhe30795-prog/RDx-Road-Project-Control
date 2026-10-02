@@ -586,6 +586,7 @@ export const workOrderItems = mysqlTable("work_order_items", {
   srNo: int("srNo").default(1).notNull(),
   description: text("description").notNull(),
   unit: varchar("unit", { length: 30 }).notNull(),
+  quantity: decimal("quantity", { precision: 14, scale: 3 }).default("1.000").notNull(),
   rate: decimal("rate", { precision: 14, scale: 2 }).default("0.00").notNull(),
   sortOrder: int("sortOrder").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
