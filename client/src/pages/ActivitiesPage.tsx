@@ -202,9 +202,9 @@ export default function ActivitiesPage() {
 
       {/* Activities Grid / Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-slate-100 text-slate-800 uppercase text-[11px] font-bold tracking-wider border-b border-slate-200">
+        <div className="overflow-auto boq-table-scroll" style={{ maxHeight: "60vh" }}>
+          <table className="w-full min-w-[1100px] text-left text-xs text-slate-600">
+            <thead className="bg-slate-100 sticky top-0 z-10 text-slate-800 uppercase text-[11px] font-bold tracking-wider border-b border-slate-200">
               <tr>
                 <th className="py-3 px-4">Task ID</th>
                 <th className="py-3 px-4">Road Stretch</th>
