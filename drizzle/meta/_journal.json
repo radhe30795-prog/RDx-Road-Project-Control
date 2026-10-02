@@ -134,6 +134,13 @@
       "when": 1790871000000,
       "tag": "0018_noble_sentinel",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1790872000000,
+      "tag": "0019_site_coordinator_role",
+      "breakpoints": true
     }
   ]
 }
