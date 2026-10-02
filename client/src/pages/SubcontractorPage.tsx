@@ -11,7 +11,9 @@ import {
   FileCheck2,
   Building,
   DollarSign,
-  UserCheck
+  UserCheck,
+  ChevronDown,
+  ChevronRight
 } from "lucide-react";
 import { toast } from "sonner";
 import { useRole } from "../components/AppLayout";
@@ -24,6 +26,7 @@ export default function SubcontractorPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isWoModalOpen, setIsWoModalOpen] = useState(false);
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
+  const [expandedWoId, setExpandedWoId] = useState<number | null>(null);
 
   // Edit / Payment / Progress modal state
   const [editingWo, setEditingWo] = useState<any | null>(null);
@@ -31,6 +34,8 @@ export default function SubcontractorPage() {
   const [progressWo, setProgressWo] = useState<any | null>(null);
   const [editingSub, setEditingSub] = useState<any | null>(null);
   const [docWoId, setDocWoId] = useState<number | null>(null);
+  const [ledgerSub, setLedgerSub] = useState<any | null>(null);
+  const [ledgerRoadId, setLedgerRoadId] = useState<string>("All");
 
   // Work Order Edit form fields
   const [editScope, setEditScope] = useState("");
@@ -87,6 +92,21 @@ export default function SubcontractorPage() {
     projectId: activeProjectId,
     roadId: selectedRoadId !== "All" ? parseInt(selectedRoadId) : undefined,
   });
+
+  // Subcontractor ledger (consolidated account per sub per site)
+  const { data: ledgerData, isLoading: ledgerLoading, refetch: refetchLedger } = trpc.subcontractors.ledger.useQuery(
+    {
+      subcontractorId: ledgerSub?.id as number,
+      projectId: activeProjectId,
+      roadId: ledgerRoadId !== "All" ? parseInt(ledgerRoadId) : undefined,
+    },
+    { enabled: !!ledgerSub }
+  );
+
+  function openLedger(s: any) {
+    setLedgerRoadId(selectedRoadId);
+    setLedgerSub(s);
+  }
 
   const createSubMutation = trpc.subcontractors.create.useMutation();
   const createWoMutation = trpc.subcontractors.createWorkOrder.useMutation();
@@ -455,12 +475,21 @@ export default function SubcontractorPage() {
                     </td>
                     <td className="p-3 text-right">
                       {canEdit ? (
-                        <button
-                          onClick={() => openEditSub(s)}
-                          className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded font-bold text-[10px]"
-                        >
-                          ✏️ Edit
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => openLedger(s)}
+                            title="Consolidated account (hisab) for this subcontractor"
+                            className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded font-bold text-[10px]"
+                          >
+                            📒 Ledger
+                          </button>
+                          <button
+                            onClick={() => openEditSub(s)}
+                            className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded font-bold text-[10px]"
+                          >
+                            ✏️ Edit
+                          </button>
+                        </div>
                       ) : (
                         <span className="text-[10px] text-slate-400">View</span>
                       )}
@@ -1105,6 +1134,151 @@ export default function SubcontractorPage() {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
           <div className="bg-white rounded-2xl w-full max-w-4xl h-[92vh] flex flex-col shadow-2xl overflow-hidden">
             <WorkOrderDocument workOrderId={docWoId} onClose={() => { setDocWoId(null); refetchWo(); }} />
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Subcontractor Ledger (consolidated hisab per site) */}
+      {ledgerSub && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl w-full max-w-4xl h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="p-4 bg-indigo-900 text-white flex items-center justify-between shrink-0">
+              <div>
+                <h2 className="text-base font-bold flex items-center gap-2">📒 Subcontractor Ledger</h2>
+                <p className="text-[11px] text-indigo-200">
+                  {ledgerSub.name} • {ledgerSub.subcontractorCode} • {ledgerSub.workCategory}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={ledgerRoadId}
+                  onChange={(e) => setLedgerRoadId(e.target.value)}
+                  className="px-2 py-1.5 rounded-lg text-xs font-semibold bg-indigo-800 text-white border border-indigo-700"
+                >
+                  <option value="All">All Roads (sites)</option>
+                  {roads?.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.roadId} - {r.roadName}
+                    </option>
+                  ))}
+                </select>
+                <button onClick={() => setLedgerSub(null)} className="text-indigo-200 hover:text-white text-sm font-bold px-2">
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {ledgerLoading ? (
+                <p className="text-center text-slate-400 text-sm py-10">Loading ledger...</p>
+              ) : !ledgerData ? (
+                <p className="text-center text-slate-400 text-sm py-10">No data found.</p>
+              ) : (
+                <>
+                  {/* Summary cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    {[
+                      { label: "Total Awarded", value: ledgerData.totals.totalAwarded, bg: "bg-slate-50 border-slate-200", tx: "text-slate-800" },
+                      { label: "Executed Value", value: ledgerData.totals.totalExecValue, bg: "bg-blue-50 border-blue-200", tx: "text-blue-800" },
+                      { label: "Total Paid", value: ledgerData.totals.totalPaid, bg: "bg-emerald-50 border-emerald-200", tx: "text-emerald-800" },
+                      { label: "Balance Payable", value: ledgerData.totals.balancePayable, bg: "bg-amber-50 border-amber-200", tx: "text-amber-800" },
+                      { label: "Retention Held", value: ledgerData.totals.totalRetention, bg: "bg-violet-50 border-violet-200", tx: "text-violet-800" },
+                    ].map((c) => (
+                      <div key={c.label} className={`${c.bg} border rounded-xl p-3`}>
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{c.label}</p>
+                        <p className={`text-sm font-bold font-mono ${c.tx}`}>
+                          ₹{c.value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    {ledgerData.totals.woCount} work order(s)
+                    {ledgerRoadId !== "All" ? " on selected site" : " across all sites"} • Executed value = executed qty × rate
+                  </p>
+
+                  {/* Work orders table */}
+                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                    <div className="p-2.5 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-700">
+                      Work Orders ({ledgerData.workOrders.length})
+                    </div>
+                    <div className="overflow-auto boq-table-scroll" style={{ maxHeight: "30vh" }}>
+                      <table className="w-full min-w-[760px] text-left text-xs">
+                        <thead className="sticky top-0 z-10 bg-slate-800 text-white font-semibold uppercase tracking-wider text-[10px]">
+                          <tr>
+                            <th className="p-2.5">WO No.</th>
+                            <th className="p-2.5">Road / Site</th>
+                            <th className="p-2.5">Scope</th>
+                            <th className="p-2.5 text-right">Awarded ₹</th>
+                            <th className="p-2.5 text-right">Executed ₹</th>
+                            <th className="p-2.5 text-right">Paid ₹</th>
+                            <th className="p-2.5 text-center">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {ledgerData.workOrders.length === 0 ? (
+                            <tr><td colSpan={7} className="p-6 text-center text-slate-400">No work orders for this selection.</td></tr>
+                          ) : (
+                            ledgerData.workOrders.map((r: any) => {
+                              const wo = r.wo;
+                              const execVal = parseFloat(String(wo.executedQuantity || 0)) * parseFloat(String(wo.rate || 0));
+                              return (
+                                <tr key={wo.id} className="hover:bg-slate-50">
+                                  <td className="p-2.5 font-mono font-bold text-slate-900">{wo.workOrderNo}</td>
+                                  <td className="p-2.5 text-slate-600">{r.road ? `${r.road.roadId}` : "—"}</td>
+                                  <td className="p-2.5 text-slate-700 max-w-[220px] truncate" title={wo.scope}>{wo.scope}</td>
+                                  <td className="p-2.5 text-right font-mono">₹{parseFloat(String(wo.awardedAmount || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                                  <td className="p-2.5 text-right font-mono text-blue-700">₹{execVal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                                  <td className="p-2.5 text-right font-mono text-emerald-700">₹{parseFloat(String(wo.paidAmount || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                                  <td className="p-2.5 text-center">
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">{wo.status}</span>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Payment history */}
+                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                    <div className="p-2.5 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-700">
+                      Payment History ({ledgerData.payments.length})
+                    </div>
+                    <div className="overflow-auto boq-table-scroll" style={{ maxHeight: "24vh" }}>
+                      <table className="w-full min-w-[600px] text-left text-xs">
+                        <thead className="sticky top-0 z-10 bg-slate-800 text-white font-semibold uppercase tracking-wider text-[10px]">
+                          <tr>
+                            <th className="p-2.5">Date</th>
+                            <th className="p-2.5">WO No.</th>
+                            <th className="p-2.5 text-right">Amount ₹</th>
+                            <th className="p-2.5">Remarks</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {ledgerData.payments.length === 0 ? (
+                            <tr><td colSpan={4} className="p-6 text-center text-slate-400">No payments recorded yet.</td></tr>
+                          ) : (
+                            ledgerData.payments.map((p: any, i: number) => (
+                              <tr key={i} className="hover:bg-slate-50">
+                                <td className="p-2.5 font-mono text-slate-700">{p.date}</td>
+                                <td className="p-2.5 font-mono font-semibold text-slate-800">{p.woNo}</td>
+                                <td className="p-2.5 text-right font-mono font-bold text-emerald-700">
+                                  ₹{p.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                                </td>
+                                <td className="p-2.5 text-slate-600">{p.remarks || "—"}</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
