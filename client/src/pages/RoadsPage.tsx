@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "wouter";
 import { trpc } from "../lib/trpc";
+import { useActiveProject } from "../components/ProjectContext";
 import {
   Compass,
   Plus,
@@ -31,9 +32,8 @@ export default function RoadsPage() {
   const [endRd, setEndRd] = useState("");
   const [remarks, setRemarks] = useState("");
 
-  const { data: roads, isLoading, refetch } = trpc.roads.list.useQuery();
-  const { data: projects } = trpc.projects.list.useQuery();
-  const activeProjectId = projects?.[0]?.id || 1;
+  const { projectId: activeProjectId } = useActiveProject();
+  const { data: roads, isLoading, refetch } = trpc.roads.list.useQuery({ projectId: activeProjectId });
 
   const createRoad = trpc.roads.create.useMutation({
     onSuccess: () => {
@@ -309,7 +309,7 @@ export default function RoadsPage() {
                 onClick={() => {
                   createRoad.mutate({
                     roadId,
-                    projectId: activeProjectId,
+                    projectId: activeProjectId as number,
                     roadName,
                     roadLengthKm,
                     startRd,
