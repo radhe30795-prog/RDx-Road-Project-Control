@@ -1101,3 +1101,45 @@ export const rateAnalysisComponents = mysqlTable("rate_analysis_components", {
 
 export type RateAnalysisComponent = typeof rateAnalysisComponents.$inferSelect;
 export type InsertRateAnalysisComponent = typeof rateAnalysisComponents.$inferInsert;
+
+/**
+ * 10E. BBS — BAR BENDING SCHEDULE (QS reinforcement steel calculation)
+ * Each bar row auto-computes:
+ *   hookAllowance (mm) = dia × shape multiplier (Straight 0, L-bend 18, U-bend 27, Stirrup 24, Crank 18.84)
+ *   totalLength (m) = nos × (lengthEach + hookAllowance/1000)
+ *   weightKg = dia²/162 × totalLength   (standard unit-weight formula)
+ */
+export const bbsSchedules = mysqlTable("bbs_schedules", {
+  id: int("id").autoincrement().primaryKey(),
+  projectId: int("projectId").notNull(),
+  roadId: int("roadId"),
+  structureId: int("structureId"),
+  title: varchar("title", { length: 255 }).notNull(),
+  status: mysqlEnum("status", ["Draft", "Approved"]).default("Draft").notNull(),
+  remarks: text("remarks"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type BbsSchedule = typeof bbsSchedules.$inferSelect;
+export type InsertBbsSchedule = typeof bbsSchedules.$inferInsert;
+
+export const bbsBars = mysqlTable("bbs_bars", {
+  id: int("id").autoincrement().primaryKey(),
+  scheduleId: int("scheduleId").notNull(),
+  barMark: varchar("barMark", { length: 20 }).notNull(),
+  description: text("description").notNull(),
+  dia: decimal("dia", { precision: 5, scale: 1 }).default("0.0").notNull(),
+  nos: int("nos").default(0).notNull(),
+  lengthEach: decimal("lengthEach", { precision: 10, scale: 3 }).default("0.000").notNull(),
+  shape: mysqlEnum("shape", ["Straight", "L-bend", "U-bend", "Stirrup", "Crank"]).default("Straight").notNull(),
+  hookAllowance: decimal("hookAllowance", { precision: 10, scale: 1 }).default("0.0").notNull(),
+  totalLength: decimal("totalLength", { precision: 14, scale: 3 }).default("0.000").notNull(),
+  weightKg: decimal("weightKg", { precision: 14, scale: 2 }).default("0.00").notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type BbsBar = typeof bbsBars.$inferSelect;
+export type InsertBbsBar = typeof bbsBars.$inferInsert;
