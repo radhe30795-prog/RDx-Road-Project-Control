@@ -15,6 +15,7 @@ import {
   AlertCircle
 } from "lucide-react";
 import { useRole } from "../components/AppLayout";
+import { toast } from "sonner";
 
 const COMMON_MATERIALS = [
   "VG-30 Paving Bitumen",
@@ -69,10 +70,43 @@ export default function MaterialsPage() {
     },
   });
 
+  const updateMaterial = trpc.materials.update.useMutation({
+    onSuccess: () => { refetch(); toast.success("Material updated"); },
+  });
+
+  // Edit states
+  const [editingMaterial, setEditingMaterial] = useState<any | null>(null);
+  const [editReceivedQty, setEditReceivedQty] = useState("");
+  const [editUsedQty, setEditUsedQty] = useState("");
+  const [editRemarks, setEditRemarks] = useState("");
+
   const resetForm = () => {
     setEntryId("");
     setChallanReference("");
     setRemarks("");
+  };
+
+  const openEditMaterial = (m: any) => {
+    setEditingMaterial(m);
+    setEditReceivedQty(String(m.receivedQuantity || "0"));
+    setEditUsedQty(String(m.usedQuantity || "0"));
+    setEditRemarks(m.remarks || "");
+  };
+
+  const handleUpdateMaterial = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMaterial) return;
+    try {
+      await updateMaterial.mutateAsync({
+        id: editingMaterial.id,
+        receivedQuantity: editReceivedQty || undefined,
+        usedQuantity: editUsedQty || undefined,
+        remarks: editRemarks.trim() || undefined,
+      });
+      setEditingMaterial(null);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update material");
+    }
   };
 
   const calculatedBalancePreview = (
@@ -150,9 +184,9 @@ export default function MaterialsPage() {
 
       {/* Material Stock Ledger Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-slate-100 text-slate-800 uppercase text-[11px] font-bold tracking-wider border-b border-slate-200">
+        <div className="overflow-auto boq-table-scroll" style={{ maxHeight: "60vh" }}>
+          <table className="w-full text-left text-xs text-slate-600 min-w-[1100px]">
+            <thead className="bg-slate-100 text-slate-800 uppercase text-[11px] font-bold tracking-wider border-b border-slate-200 sticky top-0 z-10">
               <tr>
                 <th className="py-3 px-4">Entry ID</th>
                 <th className="py-3 px-4">Date</th>
@@ -163,6 +197,7 @@ export default function MaterialsPage() {
                 <th className="py-3 px-4 text-right">Balance Qty (Auto)</th>
                 <th className="py-3 px-4">Supplier & Challan</th>
                 <th className="py-3 px-4">Remarks</th>
+                <th className="py-3 px-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -208,6 +243,14 @@ export default function MaterialsPage() {
                     </td>
                     <td className="py-3 px-4 text-slate-500 max-w-xs truncate text-[11px]">
                       {m.remarks || "—"}
+                    </td>
+                    <td className="py-3 px-4 text-center whitespace-nowrap">
+                      <button
+                        onClick={() => openEditMaterial(m)}
+                        className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-md text-[11px] font-bold shadow"
+                      >
+                        ✏️ Edit
+                      </button>
                     </td>
                   </tr>
                 );
@@ -389,6 +432,79 @@ export default function MaterialsPage() {
                 Save Material Stock
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit Material Entry */}
+      {editingMaterial && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-6 space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="border-b pb-2">
+              <h3 className="text-base font-bold text-slate-900">✏️ Edit Material Entry</h3>
+              <p className="text-xs text-slate-500">
+                {editingMaterial.entryId} • {editingMaterial.material} — Balance recalculates automatically as (Received Qty − Used Qty).
+              </p>
+            </div>
+            <form onSubmit={handleUpdateMaterial} className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">Received Qty</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editReceivedQty}
+                    onChange={(e) => setEditReceivedQty(e.target.value)}
+                    className="w-full p-2 border rounded font-mono font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">Used Qty</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editUsedQty}
+                    onChange={(e) => setEditUsedQty(e.target.value)}
+                    className="w-full p-2 border rounded font-mono font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-purple-50 rounded-lg border border-purple-200 flex items-center justify-between">
+                <span className="text-[11px] font-bold text-purple-900">New Balance (auto):</span>
+                <span className="text-lg font-black text-purple-950 font-mono">
+                  {(parseFloat(editReceivedQty || "0") - parseFloat(editUsedQty || "0")).toFixed(2)} {editingMaterial.unit}
+                </span>
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">Remarks</label>
+                <textarea
+                  rows={2}
+                  value={editRemarks}
+                  onChange={(e) => setEditRemarks(e.target.value)}
+                  placeholder="Optional notes..."
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setEditingMaterial(null)}
+                  className="px-4 py-1.5 border rounded text-xs font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateMaterial.isPending}
+                  className="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded text-xs font-semibold disabled:opacity-50"
+                >
+                  Update
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
