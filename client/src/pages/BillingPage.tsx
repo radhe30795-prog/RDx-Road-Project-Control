@@ -298,9 +298,9 @@ export default function BillingPage() {
 
       {/* Bills Ledger Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-slate-900 text-white font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
+        <div className="overflow-auto boq-table-scroll" style={{ maxHeight: "60vh" }}>
+          <table className="w-full min-w-[1100px] text-left text-xs text-slate-600">
+            <thead className="bg-slate-900 sticky top-0 z-10 text-white font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
               <tr>
                 <th className="py-3 px-4">Bill ID & Road</th>
                 <th className="py-3 px-4">Bill Type & Period</th>
