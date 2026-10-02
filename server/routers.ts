@@ -503,9 +503,11 @@ export const appRouter = router({
 
   // 10. DASHBOARD ROUTER
   dashboard: router({
-    getStats: publicProcedure.query(async () => {
-      return db.getDashboardStats();
-    }),
+    getStats: publicProcedure
+      .input(z.object({ projectId: z.number().optional() }).nullish())
+      .query(async ({ input }) => {
+        return db.getDashboardStats(input?.projectId);
+      }),
   }),
 
   // 1. PROJECTS ROUTER
@@ -583,7 +585,8 @@ export const appRouter = router({
       .input(z.object({
         roadId: z.number().optional(),
         phase: z.string().optional(),
-        status: z.string().optional()
+        status: z.string().optional(),
+        projectId: z.number().optional()
       }).nullish())
       .query(async ({ input }) => {
         return db.getActivities(input || undefined);
@@ -742,9 +745,9 @@ export const appRouter = router({
   // 4D. ELECTRONIC MEASUREMENT BOOK (e-MB) ROUTER
   measurements: router({
     list: roleProcedure(COMMERCIAL_ROLES)
-      .input(z.object({ roadId: z.number().optional(), boqItemId: z.number().optional() }).nullish())
+      .input(z.object({ roadId: z.number().optional(), boqItemId: z.number().optional(), projectId: z.number().optional() }).nullish())
       .query(async ({ input }) => {
-        return db.getMeasurements(input?.roadId, input?.boqItemId);
+        return db.getMeasurements(input?.roadId, input?.boqItemId, input?.projectId);
       }),
     create: roleProcedure(COMMERCIAL_ROLES)
       .input(z.object({
@@ -819,9 +822,9 @@ export const appRouter = router({
   // 5. BILLING & QS ROUTER
   billing: router({
     list: roleProcedure(COMMERCIAL_ROLES)
-      .input(z.object({ roadId: z.number().optional() }).nullish())
+      .input(z.object({ roadId: z.number().optional(), projectId: z.number().optional() }).nullish())
       .query(async ({ input }) => {
-        return db.getBills(input?.roadId);
+        return db.getBills(input?.roadId, input?.projectId);
       }),
     getLines: roleProcedure(COMMERCIAL_ROLES)
       .input(z.object({ billId: z.number() }))
@@ -1020,9 +1023,9 @@ export const appRouter = router({
   // 8. MATERIALS ROUTER
   materials: router({
     list: publicProcedure
-      .input(z.object({ roadId: z.number().optional() }).nullish())
+      .input(z.object({ roadId: z.number().optional(), projectId: z.number().optional() }).nullish())
       .query(async ({ input }) => {
-        return db.getMaterials(input?.roadId);
+        return db.getMaterials(input?.roadId, input?.projectId);
       }),
     create: publicProcedure
       .input(z.object({
@@ -1452,6 +1455,7 @@ export const appRouter = router({
           "Other"
         ]).optional(),
         status: z.enum(["Not Started", "In Progress", "Completed", "On Hold"]).optional(),
+        projectId: z.number().optional(),
       }).nullish())
       .query(async ({ input }) => {
         return db.getRoadStructures(input || undefined);
