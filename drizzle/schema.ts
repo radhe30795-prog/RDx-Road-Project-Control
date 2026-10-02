@@ -987,3 +987,45 @@ export const hrGroupSettlements = mysqlTable("hr_group_settlements", {
 
 export type HrGroupSettlement = typeof hrGroupSettlements.$inferSelect;
 export type InsertHrGroupSettlement = typeof hrGroupSettlements.$inferInsert;
+
+/**
+ * 12. RATE ANALYSIS (QS Module)
+ * SOR-based rate build-up per unit of work.
+ * Header (rate_analyses) + Material/Labour/Machinery components (rate_analysis_components).
+ * amount = coefficient x rate (qty per unit of work x unit rate).
+ */
+export const rateAnalyses = mysqlTable("rate_analyses", {
+  id: int("id").autoincrement().primaryKey(),
+  projectId: int("projectId").notNull(),
+  analysisNo: varchar("analysisNo", { length: 50 }).notNull(),
+  description: text("description"),
+  unit: varchar("unit", { length: 30 }).default("Cum"),
+  sorRef: varchar("sorRef", { length: 100 }),
+  leadKm: decimal("leadKm", { precision: 8, scale: 2 }).default("0.00"),
+  overheadPct: decimal("overheadPct", { precision: 5, scale: 2 }).default("0.00"),
+  profitPct: decimal("profitPct", { precision: 5, scale: 2 }).default("0.00"),
+  status: mysqlEnum("status", ["Draft", "Approved"]).default("Draft").notNull(),
+  remarks: text("remarks"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type RateAnalysis = typeof rateAnalyses.$inferSelect;
+export type InsertRateAnalysis = typeof rateAnalyses.$inferInsert;
+
+export const rateAnalysisComponents = mysqlTable("rate_analysis_components", {
+  id: int("id").autoincrement().primaryKey(),
+  analysisId: int("analysisId").notNull(),
+  category: mysqlEnum("category", ["Material", "Labour", "Machinery"]).notNull(),
+  description: varchar("description", { length: 255 }).notNull(),
+  unit: varchar("unit", { length: 30 }).default("Nos"),
+  coefficient: decimal("coefficient", { precision: 14, scale: 4 }).default("0.0000"),
+  rate: decimal("rate", { precision: 14, scale: 2 }).default("0.00"),
+  amount: decimal("amount", { precision: 14, scale: 2 }).default("0.00"),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type RateAnalysisComponent = typeof rateAnalysisComponents.$inferSelect;
+export type InsertRateAnalysisComponent = typeof rateAnalysisComponents.$inferInsert;
