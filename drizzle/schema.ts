@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, date } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, date, boolean } from "drizzle-orm/mysql-core";
 
 /**
  * Users Table
@@ -595,6 +595,54 @@ export const workOrderItems = mysqlTable("work_order_items", {
 
 export type WorkOrderItem = typeof workOrderItems.$inferSelect;
 export type InsertWorkOrderItem = typeof workOrderItems.$inferInsert;
+
+/**
+ * 10D. SUBCONTRACTOR RA BILLS (running bills with retention/security deduction)
+ * Retention is deducted at retentionPct on every bill; on the final bill
+ * (isFinalBill) retention is forced to 0 and previously held retention is released.
+ */
+export const subcontractorBills = mysqlTable("subcontractor_bills", {
+  id: int("id").autoincrement().primaryKey(),
+  projectId: int("projectId").notNull(),
+  workOrderId: int("workOrderId").notNull(),
+  subcontractorId: int("subcontractorId").notNull(),
+  billNo: varchar("billNo", { length: 60 }).notNull(),
+  billDate: varchar("billDate", { length: 20 }).notNull(),
+  periodFrom: varchar("periodFrom", { length: 20 }),
+  periodTo: varchar("periodTo", { length: 20 }),
+  grossAmount: decimal("grossAmount", { precision: 16, scale: 2 }).default("0.00").notNull(),
+  retentionPct: decimal("retentionPct", { precision: 5, scale: 2 }).default("15.00").notNull(),
+  retentionAmount: decimal("retentionAmount", { precision: 16, scale: 2 }).default("0.00").notNull(),
+  tdsPct: decimal("tdsPct", { precision: 5, scale: 2 }).default("2.00").notNull(),
+  tdsAmount: decimal("tdsAmount", { precision: 16, scale: 2 }).default("0.00").notNull(),
+  otherDeductions: decimal("otherDeductions", { precision: 16, scale: 2 }).default("0.00").notNull(),
+  otherDeductionRemarks: text("otherDeductionRemarks"),
+  netPayable: decimal("netPayable", { precision: 16, scale: 2 }).default("0.00").notNull(),
+  isFinalBill: boolean("isFinalBill").default(false).notNull(),
+  status: mysqlEnum("status", ["Draft", "Submitted", "Approved", "Paid"]).default("Draft").notNull(),
+  remarks: text("remarks"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SubcontractorBill = typeof subcontractorBills.$inferSelect;
+export type InsertSubcontractorBill = typeof subcontractorBills.$inferInsert;
+
+export const subcontractorBillItems = mysqlTable("subcontractor_bill_items", {
+  id: int("id").autoincrement().primaryKey(),
+  billId: int("billId").notNull(),
+  description: text("description").notNull(),
+  unit: varchar("unit", { length: 30 }).notNull(),
+  qty: decimal("qty", { precision: 14, scale: 3 }).default("0.000").notNull(),
+  rate: decimal("rate", { precision: 14, scale: 2 }).default("0.00").notNull(),
+  amount: decimal("amount", { precision: 16, scale: 2 }).default("0.00").notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type SubcontractorBillItem = typeof subcontractorBillItems.$inferSelect;
+export type InsertSubcontractorBillItem = typeof subcontractorBillItems.$inferInsert;
 
 /**
  * 10B. PLANT, MACHINERY & FUEL LOGBOOK
