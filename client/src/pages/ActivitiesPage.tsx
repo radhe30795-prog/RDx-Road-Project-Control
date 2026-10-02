@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { trpc } from "../lib/trpc";
+import { useActiveProject } from "../components/ProjectContext";
 import {
   ListTodo,
   Plus,
@@ -58,15 +59,15 @@ export default function ActivitiesPage() {
   const [predecessorActivity, setPredecessorActivity] = useState("");
   const [remarks, setRemarks] = useState("");
 
+  const { projectId: activeProjectId } = useActiveProject();
   const { data: activities, isLoading, refetch } = trpc.activities.list.useQuery({
+    projectId: activeProjectId,
     roadId: selectedRoadId !== "All Roads" ? parseInt(selectedRoadId) : undefined,
     phase: selectedPhase !== "All Phases" ? selectedPhase : undefined,
     status: selectedStatus !== "All Statuses" ? selectedStatus : undefined,
   });
 
-  const { data: roads } = trpc.roads.list.useQuery();
-  const { data: projects } = trpc.projects.list.useQuery();
-  const activeProjectId = projects?.[0]?.id || 1;
+  const { data: roads } = trpc.roads.list.useQuery({ projectId: activeProjectId });
 
   const createActivity = trpc.activities.create.useMutation({
     onSuccess: () => {
@@ -438,7 +439,7 @@ export default function ActivitiesPage() {
                 onClick={() => {
                   createActivity.mutate({
                     taskId,
-                    projectId: activeProjectId,
+                    projectId: activeProjectId as number,
                     roadId,
                     phase,
                     activityName,
