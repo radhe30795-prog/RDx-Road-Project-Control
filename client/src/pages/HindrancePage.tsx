@@ -14,6 +14,7 @@ import {
   Check
 } from "lucide-react";
 import { useRole } from "../components/AppLayout";
+import { toast } from "sonner";
 
 const CATEGORIES = [
   "All Categories",
@@ -38,6 +39,13 @@ export default function HindrancePage() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isResolveOpen, setIsResolveOpen] = useState(false);
   const [selectedHindrance, setSelectedHindrance] = useState<any>(null);
+
+  // Edit hindrance states
+  const [editingHindrance, setEditingHindrance] = useState<any>(null);
+  const [editStatus, setEditStatus] = useState("");
+  const [editResolutionDate, setEditResolutionDate] = useState("");
+  const [editRemarks, setEditRemarks] = useState("");
+  const [editResponsible, setEditResponsible] = useState("");
 
   // Form states
   const [roadId, setRoadId] = useState<number>(1);
@@ -82,6 +90,28 @@ export default function HindrancePage() {
   };
 
   const todayStr = new Date().toISOString().split("T")[0];
+
+  function openEditHindrance(h: any) {
+    setEditingHindrance(h);
+    setEditStatus(h.status || "Open");
+    setEditResolutionDate(h.resolutionDate || todayStr);
+    setEditRemarks(h.remarks || "");
+    setEditResponsible(h.responsiblePersonDepartment || "");
+  }
+
+  const handleUpdateHindrance = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingHindrance) return;
+    updateHindrance.mutate({
+      id: editingHindrance.id,
+      status: editStatus as any,
+      resolutionDate: editResolutionDate || undefined,
+      remarks: editRemarks || undefined,
+      responsiblePersonDepartment: editResponsible || undefined,
+    });
+    setEditingHindrance(null);
+    toast.success(`Hindrance ${editingHindrance.hindranceId} updated!`);
+  };
 
   const filtered = (hindrances || []).filter(({ hindrance: h, road }) => {
     if (selectedCategory !== "All Categories" && h.category !== selectedCategory) return false;
@@ -205,7 +235,7 @@ export default function HindrancePage() {
       </div>
 
       {/* Hindrances List */}
-      <div className="space-y-3">
+      <div className="space-y-3 overflow-auto boq-table-scroll pr-1" style={{ maxHeight: "60vh" }}>
         {filtered.map(({ hindrance: h, road }) => {
           const isOverdue = h.status !== "Resolved" && h.dueDate && h.dueDate < todayStr;
           return (
@@ -278,22 +308,31 @@ export default function HindrancePage() {
                   </span>
                 </div>
 
-                {h.status !== "Resolved" ? (
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={() => {
-                      setSelectedHindrance(h);
-                      setIsResolveOpen(true);
-                    }}
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold flex items-center gap-1 shadow"
+                    onClick={() => openEditHindrance(h)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-[10px] font-bold transition"
+                    title="Edit hindrance"
                   >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Mark Resolved</span>
+                    ✏️ Edit
                   </button>
-                ) : (
-                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
-                    Resolved on {h.resolutionDate}
-                  </span>
-                )}
+                  {h.status !== "Resolved" ? (
+                    <button
+                      onClick={() => {
+                        setSelectedHindrance(h);
+                        setIsResolveOpen(true);
+                      }}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold flex items-center gap-1 shadow"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Mark Resolved</span>
+                    </button>
+                  ) : (
+                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
+                      Resolved on {h.resolutionDate}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           );
@@ -530,6 +569,87 @@ export default function HindrancePage() {
                 Confirm Resolution
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Modal: Edit Hindrance */}
+      {editingHindrance && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                ✏️ Edit Hindrance: {editingHindrance.hindranceId}
+              </h3>
+              <button
+                onClick={() => setEditingHindrance(null)}
+                className="text-slate-400 hover:text-slate-600 text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-slate-600">{editingHindrance.description}</p>
+
+            <form onSubmit={handleUpdateHindrance} className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">Status</label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value)}
+                    className="w-full p-2 border rounded font-semibold"
+                  >
+                    <option value="Open">Open</option>
+                    <option value="Under Review">Under Review</option>
+                    <option value="Resolved">Resolved</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">Resolution Date</label>
+                  <input
+                    type="date"
+                    value={editResolutionDate}
+                    onChange={(e) => setEditResolutionDate(e.target.value)}
+                    className="w-full p-2 border rounded font-mono"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">Responsible Dept / Person</label>
+                <input
+                  type="text"
+                  value={editResponsible}
+                  onChange={(e) => setEditResponsible(e.target.value)}
+                  placeholder="e.g. DISCOM / CALA / Forest Dept"
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">Remarks</label>
+                <textarea
+                  rows={3}
+                  value={editRemarks}
+                  onChange={(e) => setEditRemarks(e.target.value)}
+                  placeholder="Action taken, joint inspection, clearance letter received..."
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setEditingHindrance(null)}
+                  className="px-4 py-1.5 border rounded text-xs font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateHindrance.isPending}
+                  className="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded text-xs font-semibold disabled:opacity-50"
+                >
+                  {updateHindrance.isPending ? "Updating..." : "Update Hindrance"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
