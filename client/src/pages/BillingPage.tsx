@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { trpc } from "../lib/trpc";
+import { useActiveProject } from "../components/ProjectContext";
 import {
   Receipt,
   Plus,
@@ -71,18 +72,18 @@ export default function BillingPage() {
   const [autoGst, setAutoGst] = useState("18");
   const [autoRetention, setAutoRetention] = useState("5");
 
+  const { projectId: activeProjectId, activeProject } = useActiveProject();
   const { data: bills, isLoading, refetch } = trpc.billing.list.useQuery({
+    projectId: activeProjectId,
     roadId: selectedRoadId !== "All Roads" ? parseInt(selectedRoadId) : undefined,
   });
 
-  const { data: roads } = trpc.roads.list.useQuery();
-  const { data: projects } = trpc.projects.list.useQuery();
-  const activeProjectId = projects?.[0]?.id || 1;
+  const { data: roads } = trpc.roads.list.useQuery({ projectId: activeProjectId });
 
   // Lazy query for RA Bill Excel export data (fetched only when user clicks export)
   const exportQuery = trpc.billing.getBillExportData.useQuery(
     {
-      projectId: activeProjectId,
+      projectId: activeProjectId as number,
       roadIds: exportRoadIds.length > 0 ? exportRoadIds : undefined,
       periodFrom: exportPeriodFrom,
       periodTo: exportPeriodTo,
@@ -132,7 +133,7 @@ export default function BillingPage() {
     const autoId = autoBillNo.trim() || `RA-${String((bills?.length || 0) + 1).padStart(2, "0")}`;
     await generateRaBillMutation.mutateAsync({
       billId: autoId,
-      projectId: activeProjectId,
+      projectId: activeProjectId as number,
       roadId: autoRoadId,
       billType: `Running Account Bill ${autoId}`,
       periodFrom: autoPeriodFrom,
@@ -153,7 +154,7 @@ export default function BillingPage() {
         setIsExporting(false);
         return;
       }
-      const project = projects?.[0];
+      const project = activeProject;
       downloadRaBillExcel(billData as any, {
         billNo: exportBillNo.trim() || "RA Bill",
         periodFrom: exportPeriodFrom,
@@ -695,7 +696,7 @@ export default function BillingPage() {
                   onClick={() => {
                     createBill.mutate({
                       billId,
-                      projectId: activeProjectId,
+                      projectId: activeProjectId as number,
                       roadId,
                       billType,
                       measurementStatus,
