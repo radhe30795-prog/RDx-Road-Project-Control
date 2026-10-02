@@ -61,6 +61,37 @@ export default function BoqPage() {
     onError: (e) => toast.error(e.message || "Update failed"),
   });
 
+  const recalcMutation = trpc.adminEdit.recalcBoqFromEmb.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message || "BOQ recalculated!");
+      refetch();
+    },
+    onError: (e) => toast.error(e.message || "Recalculation failed"),
+  });
+
+  const syncActMutation = trpc.adminEdit.syncActivitiesFromBoq.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message || "Activities synced!");
+      refetch();
+    },
+    onError: (e) => toast.error(e.message || "Sync failed"),
+  });
+
+  function confirmRecalc() {
+    const confirmed = window.confirm(
+      "This will recalculate ALL BOQ executed quantities from Approved e-MB entries. " +
+      "This is safe to run multiple times. Continue?"
+    );
+    if (confirmed) recalcMutation.mutate();
+  }
+
+  function confirmSyncAct() {
+    const confirmed = window.confirm(
+      "Jo BOQ items 100% complete hain, unke corresponding Activities bhi Complete mark ho jayenge. Continue?"
+    );
+    if (confirmed) syncActMutation.mutate();
+  }
+
   function openEdit(boq: any) {
     setEditingBoq(boq);
     setEditChapter(boq.chapter || "");
@@ -193,6 +224,28 @@ export default function BoqPage() {
           >
             <Plus className="w-4 h-4" />
             <span>Add BOQ Item</span>
+          </button>
+        )}
+        {(role === "admin" || role === "project_manager") && (
+          <button
+            onClick={confirmRecalc}
+            disabled={recalcMutation.isPending}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow disabled:opacity-50"
+            title="Recalculate BOQ executed quantities from Approved e-MB entries"
+          >
+            <TrendingUp className="w-4 h-4" />
+            <span>{recalcMutation.isPending ? "Recalculating..." : "🔄 Sync BOQ from e-MB"}</span>
+          </button>
+        )}
+        {(role === "admin" || role === "project_manager") && (
+          <button
+            onClick={confirmSyncAct}
+            disabled={syncActMutation.isPending}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow disabled:opacity-50"
+            title="Mark Activities Complete where BOQ is 100% executed"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            <span>{syncActMutation.isPending ? "Syncing..." : "✅ Sync Activities"}</span>
           </button>
         )}
       </div>
