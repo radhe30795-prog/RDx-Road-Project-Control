@@ -1604,6 +1604,12 @@ export async function createSubcontractor(data: InsertSubcontractor) {
   return db.insert(subcontractors).values(data);
 }
 
+export async function updateSubcontractor(id: number, data: Partial<InsertSubcontractor>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  return db.update(subcontractors).set({ ...data, updatedAt: new Date() }).where(eq(subcontractors.id, id));
+}
+
 export async function getWorkOrders(roadId?: number, subcontractorId?: number, projectId?: number) {
   const db = await getDb();
   if (!db) return [];
@@ -1639,7 +1645,24 @@ export async function createWorkOrder(data: InsertWorkOrder) {
 export async function updateWorkOrder(id: number, data: Partial<InsertWorkOrder>) {
   const db = await getDb();
   if (!db) throw new Error("Database not connected");
-  return db.update(workOrders).set({ ...data, updatedAt: new Date() }).where(eq(workOrders.id, id));
+  const set: Record<string, unknown> = { ...data, updatedAt: new Date() };
+  // Recalc awardedAmount when awardedQuantity or rate changes
+  if (data.awardedQuantity !== undefined || data.rate !== undefined) {
+    const rows = await db.select().from(workOrders).where(eq(workOrders.id, id)).limit(1);
+    if (rows.length > 0) {
+      const cur = rows[0];
+      const qty = parseFloat(String(data.awardedQuantity ?? cur.awardedQuantity ?? 0));
+      const rate = parseFloat(String(data.rate ?? cur.rate ?? 0));
+      set.awardedAmount = (qty * rate).toFixed(2);
+    }
+  }
+  return db.update(workOrders).set(set).where(eq(workOrders.id, id));
+}
+
+export async function deleteWorkOrder(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  return db.delete(workOrders).where(eq(workOrders.id, id));
 }
 
 // ----------------- PLANT, MACHINERY & FUEL LOGBOOK -----------------
