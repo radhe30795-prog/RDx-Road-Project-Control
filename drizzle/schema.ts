@@ -9,7 +9,7 @@ export const users = mysqlTable("users", {
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin", "project_manager", "qs_billing_engineer", "site_engineer", "qa_qc_engineer", "hr_payroll_manager"]).default("user").notNull(),
+  role: mysqlEnum("role", ["user", "admin", "project_manager", "qs_billing_engineer", "site_engineer", "qa_qc_engineer", "hr_payroll_manager", "site_coordinator"]).default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
