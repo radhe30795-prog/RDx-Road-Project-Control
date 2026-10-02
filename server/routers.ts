@@ -10,7 +10,7 @@ import { importHrEmployees, importWorkbook, WorkbookRows } from "./imports";
 import { clearDemoProjectData } from "./clearDemo";
 import { storagePut } from "./storage";
 import { eq, like } from "drizzle-orm";
-import { measurementEntries, boqItems, activities } from "../drizzle/schema";
+import { measurementEntries, boqItems, activities, roads } from "../drizzle/schema";
 
 export const appRouter = router({
   system: systemRouter,
@@ -170,7 +170,28 @@ export const appRouter = router({
             updated++;
           }
         }
-        return { updated, message: `Recalculated ${updated} BOQ items from Approved e-MB entries.` };
+        // Also update road progress (value-weighted BOQ %)
+        const allBoq = await database.select().from(boqItems);
+        const roadVals = new Map<number, { contract: number; exec: number }>();
+        for (const b of allBoq) {
+          const cq = parseFloat(String(b.contractQuantity || "0"));
+          const eqty = parseFloat(String(b.executedQuantity || "0"));
+          const rate = parseFloat(String(b.rate || "0"));
+          if (cq <= 0 || rate <= 0 || !b.roadId) continue;
+          const rid = b.roadId as number;
+          if (!roadVals.has(rid)) roadVals.set(rid, { contract: 0, exec: 0 });
+          const rv = roadVals.get(rid)!;
+          rv.contract += cq * rate;
+          rv.exec += Math.min(eqty, cq) * rate;
+        }
+        let roadsUpdated = 0;
+        for (const [rid, rv] of Array.from(roadVals.entries())) {
+          if (rv.contract <= 0) continue;
+          const pct = Math.min(100, (rv.exec / rv.contract) * 100).toFixed(2);
+          await database.update(roads).set({ progress: pct }).where(eq(roads.id, rid));
+          roadsUpdated++;
+        }
+        return { updated, roadsUpdated, message: `Recalculated ${updated} BOQ items and ${roadsUpdated} road progress values.` };
       }),
     // Sync Activities from BOQ: mark activities Complete where BOQ items are 100% executed
     // Maps BOQ chapter -> activity phase, per road
