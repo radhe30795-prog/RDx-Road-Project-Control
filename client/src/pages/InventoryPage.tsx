@@ -42,6 +42,9 @@ export default function InventoryPage() {
   const createMatMutation = trpc.inventory.create.useMutation();
   const createGrnMutation = trpc.grn.create.useMutation();
   const createIssueMutation = trpc.materialIssues.create.useMutation();
+  const updateInvMutation = trpc.inventory.update.useMutation({
+    onSuccess: () => { refetchInv(); toast.success("Inventory updated"); },
+  });
 
   // New Material Form
   const [matCode, setMatCode] = useState("");
@@ -74,6 +77,15 @@ export default function InventoryPage() {
   const [issueBoqId, setIssueBoqId] = useState<number | undefined>(undefined);
   const [issueQty, setIssueQty] = useState("");
   const [issuePurpose, setIssuePurpose] = useState("Direct Site Paving / Laying");
+
+  // Edit Inventory Item
+  const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [editMinStock, setEditMinStock] = useState("");
+  const [editMaxStock, setEditMaxStock] = useState("");
+  const [editAvgRate, setEditAvgRate] = useState("");
+  const [editLocation, setEditLocation] = useState("");
+  const [editApproval, setEditApproval] = useState("Approved");
+  const [editRemarks, setEditRemarks] = useState("");
 
   // Stock statistics
   const stats = useMemo(() => {
@@ -186,6 +198,35 @@ export default function InventoryPage() {
       refetchInv();
     } catch (err: any) {
       toast.error(err.message || "Failed to record issue");
+    }
+  };
+
+  const openEditItem = (item: any) => {
+    setEditingItem(item);
+    setEditMinStock(String(item.minStock || "0.000"));
+    setEditMaxStock(String(item.maxStock || "0.000"));
+    setEditAvgRate(String(item.averageRate || "0.00"));
+    setEditLocation(item.storageLocation || "");
+    setEditApproval(item.approvalStatus || "Approved");
+    setEditRemarks(item.remarks || "");
+  };
+
+  const handleUpdateItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem) return;
+    try {
+      await updateInvMutation.mutateAsync({
+        id: editingItem.id,
+        minStock: editMinStock || undefined,
+        maxStock: editMaxStock || undefined,
+        averageRate: editAvgRate || undefined,
+        storageLocation: editLocation.trim() || undefined,
+        approvalStatus: editApproval as "Pending" | "Approved" | "Rejected" | "Blocked",
+        remarks: editRemarks.trim() || undefined,
+      });
+      setEditingItem(null);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update inventory item");
     }
   };
 
@@ -322,9 +363,9 @@ export default function InventoryPage() {
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-900 text-white font-semibold uppercase tracking-wider text-[10px]">
+            <div className="overflow-auto boq-table-scroll" style={{ maxHeight: "60vh" }}>
+              <table className="w-full text-left text-xs min-w-[1100px]">
+                <thead className="bg-slate-900 text-white font-semibold uppercase tracking-wider text-[10px] sticky top-0 z-10">
                   <tr>
                     <th className="p-3">Material Code & Name</th>
                     <th className="p-3 text-right">Opening</th>
@@ -335,12 +376,13 @@ export default function InventoryPage() {
                     <th className="p-3 text-right">Avg Rate (₹)</th>
                     <th className="p-3">Yard Location</th>
                     <th className="p-3 text-center">Stock Health</th>
+                    <th className="p-3 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {isInvLoading ? (
                     <tr>
-                      <td colSpan={9} className="p-6 text-center text-slate-400">Loading stock balances...</td>
+                      <td colSpan={10} className="p-6 text-center text-slate-400">Loading stock balances...</td>
                     </tr>
                   ) : (
                     inventoryList
@@ -408,6 +450,16 @@ export default function InventoryPage() {
                                 </span>
                               )}
                             </td>
+                            <td className="p-3 text-center whitespace-nowrap">
+                              {isAuthorized && (
+                                <button
+                                  onClick={() => openEditItem(mat)}
+                                  className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-md text-[11px] font-bold shadow"
+                                >
+                                  ✏️ Edit
+                                </button>
+                              )}
+                            </td>
                           </tr>
                         );
                       })
@@ -422,9 +474,9 @@ export default function InventoryPage() {
       {/* TAB 2: GRN REGISTER */}
       {activeTab === "grn" && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-900 text-white font-semibold uppercase tracking-wider text-[10px]">
+          <div className="overflow-auto boq-table-scroll" style={{ maxHeight: "60vh" }}>
+            <table className="w-full text-left text-xs min-w-[1100px]">
+              <thead className="bg-slate-900 text-white font-semibold uppercase tracking-wider text-[10px] sticky top-0 z-10">
                 <tr>
                   <th className="p-3">GRN No. & Date</th>
                   <th className="p-3">Material</th>
@@ -487,9 +539,9 @@ export default function InventoryPage() {
       {/* TAB 3: MATERIAL ISSUES (Direct + DPR) */}
       {activeTab === "issues" && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-900 text-white font-semibold uppercase tracking-wider text-[10px]">
+          <div className="overflow-auto boq-table-scroll" style={{ maxHeight: "60vh" }}>
+            <table className="w-full text-left text-xs min-w-[1100px]">
+              <thead className="bg-slate-900 text-white font-semibold uppercase tracking-wider text-[10px] sticky top-0 z-10">
                 <tr>
                   <th className="p-3">Issue No. & Date</th>
                   <th className="p-3">Road Stretch</th>
@@ -954,6 +1006,112 @@ export default function InventoryPage() {
                   className="px-5 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg font-bold shadow disabled:opacity-50"
                 >
                   Issue & Deduct Stock
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: EDIT INVENTORY ITEM */}
+      {editingItem && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                ✏️ Edit Inventory Item
+              </h2>
+              <button onClick={() => setEditingItem(null)} className="text-slate-400 hover:text-slate-600 text-sm font-bold">
+                ✕
+              </button>
+            </div>
+            <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg p-3 text-amber-800">
+              <strong className="font-mono">{editingItem.materialCode}</strong> • {editingItem.materialName}
+              <br />
+              <span className="text-slate-600">Current Balance: <strong className="font-mono">{parseFloat(String(editingItem.balanceQuantity || 0)).toLocaleString()} {editingItem.unit}</strong></span>
+            </div>
+            <form onSubmit={handleUpdateItem} className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700">Min Reorder Level</label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    value={editMinStock}
+                    onChange={(e) => setEditMinStock(e.target.value)}
+                    className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700">Max Stock Level</label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    value={editMaxStock}
+                    onChange={(e) => setEditMaxStock(e.target.value)}
+                    className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-mono"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700">Average Rate (₹)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editAvgRate}
+                    onChange={(e) => setEditAvgRate(e.target.value)}
+                    className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700">Approval Status</label>
+                  <select
+                    value={editApproval}
+                    onChange={(e) => setEditApproval(e.target.value)}
+                    className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50"
+                  >
+                    <option value="Pending">Pending</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Rejected">Rejected</option>
+                    <option value="Blocked">Blocked</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="font-bold text-slate-700">Yard / Godown Location</label>
+                <input
+                  type="text"
+                  value={editLocation}
+                  onChange={(e) => setEditLocation(e.target.value)}
+                  placeholder="e.g. Central Base Camp"
+                  className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50"
+                />
+              </div>
+              <div>
+                <label className="font-bold text-slate-700">Remarks</label>
+                <textarea
+                  rows={2}
+                  value={editRemarks}
+                  onChange={(e) => setEditRemarks(e.target.value)}
+                  placeholder="Optional notes..."
+                  className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingItem(null)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateInvMutation.isPending}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold shadow disabled:opacity-50"
+                >
+                  Update
                 </button>
               </div>
             </form>
