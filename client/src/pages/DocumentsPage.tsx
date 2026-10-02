@@ -141,7 +141,8 @@ export default function DocumentsPage() {
       </div>
 
       {/* Document Grid / Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="overflow-auto boq-table-scroll pr-1" style={{ maxHeight: "65vh" }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map(({ doc: d, road }) => (
           <div
             key={d.id}
@@ -196,6 +197,7 @@ export default function DocumentsPage() {
             </div>
           </div>
         ))}
+        </div>
       </div>
 
       {/* Modal: Upload / Register Document */}
