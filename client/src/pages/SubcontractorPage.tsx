@@ -312,7 +312,7 @@ export default function SubcontractorPage() {
     let paid = 0;
     woList.forEach((r: any) => {
       const wo = r.wo;
-      awarded += (r.itemsCount || 0) > 0 ? (r.itemsTotal || 0) : parseFloat(String(wo.awardedAmount || 0));
+      awarded += parseFloat(String(wo.awardedAmount || 0));
       paid += parseFloat(String(wo.paidAmount || 0));
     });
     return {
@@ -541,15 +541,12 @@ export default function SubcontractorPage() {
                       (subcontractor?.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
                       (road?.roadName || "").toLowerCase().includes(searchTerm.toLowerCase())
                   )
-                  .map(({ wo, road, subcontractor, items, itemsTotal, itemsCount }) => {
+                  .map(({ wo, road, subcontractor }) => {
                     const awarded = parseFloat(String(wo.awardedAmount || 0));
                     const paid = parseFloat(String(wo.paidAmount || 0));
                     const execQty = parseFloat(String(wo.executedQuantity || 0));
                     const awardQty = parseFloat(String(wo.awardedQuantity || 1));
                     const pct = Math.min(100, Math.round((execQty / awardQty) * 100));
-                    // Prefer BOQ line-items total when the WO has items
-                    const hasItems = (itemsCount || 0) > 0;
-                    const displayAwarded = hasItems ? (itemsTotal || 0) : awarded;
 
                     return (
                       <tr key={wo.id} className="hover:bg-slate-50 transition">
@@ -570,11 +567,6 @@ export default function SubcontractorPage() {
                           <span className="text-[10px] text-slate-400 block font-mono">
                             {wo.startDate} to {wo.targetDate}
                           </span>
-                          {hasItems && (
-                            <span className="inline-block mt-1 px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold">
-                              📋 {itemsCount} items • ₹{displayAwarded.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                            </span>
-                          )}
                         </td>
                         <td className="p-3 text-right font-mono text-slate-700 whitespace-nowrap">
                           {parseFloat(String(wo.awardedQuantity)).toLocaleString()} {wo.unit}
@@ -583,8 +575,8 @@ export default function SubcontractorPage() {
                           {execQty.toLocaleString()} {wo.unit} ({pct}%)
                         </td>
                         <td className="p-3 text-right font-mono text-slate-600">₹{parseFloat(String(wo.rate)).toLocaleString()}</td>
-                        <td className="p-3 text-right font-mono font-bold text-slate-900 whitespace-nowrap" title={hasItems ? `BOQ items total (header: ₹${awarded.toLocaleString("en-IN")})` : undefined}>
-                          ₹{displayAwarded.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        <td className="p-3 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
+                          ₹{awarded.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </td>
                         <td className="p-3 text-right font-mono text-emerald-700 whitespace-nowrap">
                           ₹{paid.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
