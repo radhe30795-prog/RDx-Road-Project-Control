@@ -24,6 +24,7 @@ const ROLE_OPTIONS = [
   { value: "site_engineer", label: "Site Engineer", short: "Site", color: "amber" },
   { value: "qa_qc_engineer", label: "QA / QC Engineer", short: "QA / QC", color: "rose" },
   { value: "hr_payroll_manager", label: "HR / Payroll Manager", short: "HR / Payroll", color: "cyan" },
+  { value: "site_coordinator", label: "Site Coordinator", short: "Site Coord.", color: "violet" },
 ] as const;
 
 type RoleValue = (typeof ROLE_OPTIONS)[number]["value"];
