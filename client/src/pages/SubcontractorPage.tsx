@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 import { useRole } from "../components/AppLayout";
 import { useActiveProject } from "../components/ProjectContext";
+import WorkOrderDocument from "../components/WorkOrderDocument";
 
 export default function SubcontractorPage() {
   const { role } = useRole();
@@ -29,6 +30,7 @@ export default function SubcontractorPage() {
   const [payingWo, setPayingWo] = useState<any | null>(null);
   const [progressWo, setProgressWo] = useState<any | null>(null);
   const [editingSub, setEditingSub] = useState<any | null>(null);
+  const [docWoId, setDocWoId] = useState<number | null>(null);
 
   // Work Order Edit form fields
   const [editScope, setEditScope] = useState("");
@@ -586,6 +588,13 @@ export default function SubcontractorPage() {
                               >
                                 💰 Payment
                               </button>
+                              <button
+                                onClick={() => setDocWoId(wo.id)}
+                                title="Hindi Work Order document"
+                                className="px-2 py-1 bg-violet-50 hover:bg-violet-100 text-violet-700 border border-violet-200 rounded font-bold text-[10px]"
+                              >
+                                📄 WO
+                              </button>
                               {role === "admin" && (
                                 <button
                                   onClick={() => handleDeleteWo(wo)}
@@ -1087,6 +1096,15 @@ export default function SubcontractorPage() {
                   className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold shadow">Update</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Hindi Work Order Document */}
+      {docWoId && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl w-full max-w-4xl h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+            <WorkOrderDocument workOrderId={docWoId} onClose={() => { setDocWoId(null); refetchWo(); }} />
           </div>
         </div>
       )}
