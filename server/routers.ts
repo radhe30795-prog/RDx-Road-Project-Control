@@ -6,6 +6,7 @@ import { COMMERCIAL_ROLES, isCommercialRole } from "@shared/roles";
 import { z } from "zod";
 import * as db from "./db";
 import * as billingDb from "./subcontractorBilling";
+import * as bbsDb from "./bbsDb";
 import { TRPCError } from "@trpc/server";
 import { importHrEmployees, importWorkbook, WorkbookRows } from "./imports";
 import { clearDemoProjectData } from "./clearDemo";
@@ -1894,6 +1895,103 @@ export const appRouter = router({
       .input(z.object({ projectId: z.number() }))
       .mutation(async ({ input }) => {
         return db.seedRateAnalysisTemplates(input.projectId);
+      }),
+  }),
+
+  // 10E. BBS — BAR BENDING SCHEDULE (QS reinforcement steel)
+  bbs: router({
+    listSchedules: protectedProcedure
+      .input(z.object({ projectId: z.number().optional(), roadId: z.number().optional() }).nullish())
+      .query(async ({ input }) => {
+        return bbsDb.listBbsSchedules(input?.projectId, input?.roadId);
+      }),
+
+    createSchedule: roleProcedure(COMMERCIAL_ROLES)
+      .input(z.object({
+        projectId: z.number(),
+        roadId: z.number().optional(),
+        structureId: z.number().optional(),
+        title: z.string().min(1),
+        status: z.enum(["Draft", "Approved"]).default("Draft"),
+        remarks: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return bbsDb.createBbsSchedule(input);
+      }),
+
+    updateSchedule: roleProcedure(COMMERCIAL_ROLES)
+      .input(z.object({
+        id: z.number(),
+        title: z.string().min(1).optional(),
+        roadId: z.number().optional(),
+        structureId: z.number().optional(),
+        status: z.enum(["Draft", "Approved"]).optional(),
+        remarks: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        return bbsDb.updateBbsSchedule(id, data);
+      }),
+
+    deleteSchedule: roleProcedure(COMMERCIAL_ROLES)
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        return bbsDb.deleteBbsSchedule(input.id);
+      }),
+
+    listBars: protectedProcedure
+      .input(z.object({ scheduleId: z.number() }))
+      .query(async ({ input }) => {
+        return bbsDb.listBbsBars(input.scheduleId);
+      }),
+
+    addBar: roleProcedure(COMMERCIAL_ROLES)
+      .input(z.object({
+        scheduleId: z.number(),
+        barMark: z.string().min(1),
+        description: z.string().min(1),
+        dia: z.number().positive(),
+        nos: z.number().int().min(0),
+        lengthEach: z.number().min(0),
+        shape: z.enum(["Straight", "L-bend", "U-bend", "Stirrup", "Crank"]),
+        sortOrder: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return bbsDb.addBbsBar({
+          ...input,
+          dia: input.dia.toFixed(1),
+          lengthEach: input.lengthEach.toFixed(3),
+        } as any);
+      }),
+
+    updateBar: roleProcedure(COMMERCIAL_ROLES)
+      .input(z.object({
+        id: z.number(),
+        barMark: z.string().min(1).optional(),
+        description: z.string().min(1).optional(),
+        dia: z.number().positive().optional(),
+        nos: z.number().int().min(0).optional(),
+        lengthEach: z.number().min(0).optional(),
+        shape: z.enum(["Straight", "L-bend", "U-bend", "Stirrup", "Crank"]).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...rest } = input;
+        const data: any = { ...rest };
+        if (data.dia !== undefined) data.dia = data.dia.toFixed(1);
+        if (data.lengthEach !== undefined) data.lengthEach = data.lengthEach.toFixed(3);
+        return bbsDb.updateBbsBar(id, data);
+      }),
+
+    deleteBar: roleProcedure(COMMERCIAL_ROLES)
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        return bbsDb.deleteBbsBar(input.id);
+      }),
+
+    summary: protectedProcedure
+      .input(z.object({ scheduleId: z.number() }))
+      .query(async ({ input }) => {
+        return bbsDb.bbsSummary(input.scheduleId);
       }),
   }),
 });
