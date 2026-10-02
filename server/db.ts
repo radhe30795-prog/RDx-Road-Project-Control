@@ -375,7 +375,7 @@ export async function updateRoad(id: number, data: Partial<InsertRoad>) {
 }
 
 // ----------------- ACTIVITIES -----------------
-export async function getActivities(params?: { roadId?: number; phase?: string; status?: string }) {
+export async function getActivities(params?: { roadId?: number; phase?: string; status?: string; projectId?: number }) {
   const db = await getDb();
   if (!db) return [];
   await runActivityOverdueCheck();
@@ -392,6 +392,7 @@ export async function getActivities(params?: { roadId?: number; phase?: string; 
     if (params?.roadId && activity.roadId !== params.roadId) return false;
     if (params?.phase && activity.phase !== params.phase) return false;
     if (params?.status && activity.status !== params.status) return false;
+    if (params?.projectId && (activity as any).projectId !== params.projectId) return false;
     return true;
   });
 }
@@ -911,7 +912,7 @@ export async function createMaterialIssue(data: InsertMaterialIssue) {
 }
 
 // ----------------- ELECTRONIC MEASUREMENT BOOK (e-MB) -----------------
-export async function getMeasurements(roadId?: number, boqItemId?: number) {
+export async function getMeasurements(roadId?: number, boqItemId?: number, projectId?: number) {
   const db = await getDb();
   if (!db) return [];
   const rows = await db.select({
@@ -928,6 +929,7 @@ export async function getMeasurements(roadId?: number, boqItemId?: number) {
   return rows.filter((r) => {
     if (roadId && r.mb.roadId !== roadId) return false;
     if (boqItemId && r.mb.boqItemId !== boqItemId) return false;
+    if (projectId && (r.mb as any).projectId !== projectId) return false;
     return true;
   });
 }
@@ -1230,7 +1232,7 @@ export async function generateRaBillFromBoq(params: {
 }
 
 // ----------------- BILLING & QS -----------------
-export async function getBills(roadId?: number) {
+export async function getBills(roadId?: number, projectId?: number) {
   const db = await getDb();
   if (!db) return [];
   const rows = await db.select({
@@ -1242,6 +1244,9 @@ export async function getBills(roadId?: number) {
 
   if (roadId) {
     return rows.filter(r => r.bill.roadId === roadId);
+  }
+  if (projectId) {
+    return rows.filter(r => (r.bill as any).projectId === projectId);
   }
   return rows;
 }
@@ -1403,7 +1408,7 @@ export async function updateQaQcTest(id: number, data: Partial<InsertQaQcTest>) 
 }
 
 // ----------------- MATERIALS -----------------
-export async function getMaterials(roadId?: number) {
+export async function getMaterials(roadId?: number, projectId?: number) {
   const db = await getDb();
   if (!db) return [];
   const rows = await db.select({
@@ -1415,6 +1420,9 @@ export async function getMaterials(roadId?: number) {
 
   if (roadId) {
     return rows.filter(r => r.material.roadId === roadId);
+  }
+  if (projectId) {
+    return rows.filter(r => (r.material as any).projectId === projectId);
   }
   return rows;
 }
@@ -1489,7 +1497,7 @@ export async function markNotificationRead(id: number) {
 }
 
 // ----------------- 10. DASHBOARD METRICS -----------------
-export async function getDashboardStats() {
+export async function getDashboardStats(projectId?: number) {
   const db = await getDb();
   if (!db) return null;
 
@@ -1497,10 +1505,12 @@ export async function getDashboardStats() {
   await runHindrancePendingUpdate();
 
   const [pCount] = await db.select({ count: sql<number>`count(*)` }).from(projects);
-  const [rCount] = await db.select({ count: sql<number>`count(*)` }).from(roads);
-  const roadList = await db.select().from(roads);
+  const allRoads = await db.select().from(roads);
+  const roadList = projectId ? allRoads.filter(r => r.projectId === projectId) : allRoads;
+  const rCount = { count: roadList.length };
 
-  const actList = await db.select().from(activities);
+  const allActs = await db.select().from(activities);
+  const actList = projectId ? allActs.filter(a => (a as any).projectId === projectId) : allActs;
   const totalActivities = actList.length;
   const completedActivities = actList.filter(a => a.status === "Complete" || parseFloat(String(a.percentageComplete)) >= 100).length;
   const inProgressActivities = actList.filter(a => a.status === "In Progress").length;
@@ -1511,21 +1521,21 @@ export async function getDashboardStats() {
     ? (roadList.reduce((acc, r) => acc + parseFloat(String(r.progress || 0)), 0) / roadList.length).toFixed(2)
     : "0.00";
 
-  const hindList = await db.select().from(hindrances);
+  const hindList = (await db.select().from(hindrances)).filter(h => !projectId || (h as any).projectId === projectId);
   const todayStr = new Date().toISOString().split("T")[0];
   const openHindrances = hindList.filter(h => h.status !== "Resolved").length;
   const overdueHindrances = hindList.filter(h => h.status !== "Resolved" && h.dueDate && h.dueDate < todayStr).length;
 
-  const billList = await db.select().from(billing);
+  const billList = (await db.select().from(billing)).filter(b => !projectId || (b as any).projectId === projectId);
   const pendingBills = billList.filter(b => b.verificationStatus === "Measurement" || b.verificationStatus === "Quantity Calculation" || b.verificationStatus === "Abstract" || b.verificationStatus === "Bill Prepared").length;
   const submittedBills = billList.filter(b => b.verificationStatus === "Submitted" || b.verificationStatus === "Under Verification").length;
   const passedBills = billList.filter(b => b.verificationStatus === "Passed" || b.verificationStatus === "Payment Received").length;
   const paymentPending = billList.filter(b => b.paymentStatus === "Unpaid" && (b.verificationStatus === "Passed" || b.verificationStatus === "Payment Received")).length;
 
-  const qaList = await db.select().from(qaQcTests);
+  const qaList = (await db.select().from(qaQcTests)).filter(q => !projectId || (q as any).projectId === projectId);
   const qaQcFailedTests = qaList.filter(q => q.result === "Failed").length;
 
-  const matList = await db.select().from(materials);
+  const matList = (await db.select().from(materials)).filter(m => !projectId || (m as any).projectId === projectId);
   const totalMaterialStockCount = matList.length;
 
   // Phase-wise breakdown
@@ -1839,7 +1849,7 @@ export async function completeSignoff(id: number, params: { signedBy: string; st
 
 
 // ----------------- ROAD STRUCTURES / CD & PROTECTION WORKS REGISTER -----------------
-export async function getRoadStructures(params?: { roadId?: number; structureType?: string; status?: string }) {
+export async function getRoadStructures(params?: { roadId?: number; structureType?: string; status?: string; projectId?: number }) {
   const db = await getDb();
   if (!db) return [];
 
@@ -1854,6 +1864,7 @@ export async function getRoadStructures(params?: { roadId?: number; structureTyp
     if (params?.roadId && r.structure.roadId !== params.roadId) return false;
     if (params?.structureType && r.structure.structureType !== params.structureType) return false;
     if (params?.status && r.structure.status !== params.status) return false;
+    if (params?.projectId && (r.structure as any).projectId !== params.projectId) return false;
     return true;
   });
 }
