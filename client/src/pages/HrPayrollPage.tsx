@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { useRole } from "../components/AppLayout";
 import { exportBankPayoutCsv, generateEmployeePayslipPdf, generateMusterMatrixPdf } from "../lib/pdfReports";
 import { trpc } from "../lib/trpc";
+import { useActiveProject } from "../components/ProjectContext";
 
 type Tab = "attendance" | "muster_matrix" | "leave" | "advances" | "payroll" | "payouts" | "labour_groups" | "employees" | "assignments" | "masters";
 const employeeStatuses = ["Active", "On Leave", "Inactive", "Exited"] as const;
@@ -94,6 +95,7 @@ function formatMoney(value: number | string) {
 export default function HrPayrollPage() {
   const { role } = useRole();
   const canUseHr = role === "admin" || role === "hr_payroll_manager";
+  const { projectId: activeProjectId } = useActiveProject();
   const [tab, setTab] = useState<Tab>("attendance");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -163,7 +165,7 @@ export default function HrPayrollPage() {
   const [designationName, setDesignationName] = useState("");
   const [designationGrade, setDesignationGrade] = useState("");
 
-  const employeeInput = useMemo(() => ({ search: search || undefined, status: statusFilter === "all" ? undefined : statusFilter }), [search, statusFilter]);
+  const employeeInput = useMemo(() => ({ search: search || undefined, status: statusFilter === "all" ? undefined : statusFilter, projectId: activeProjectId }), [search, statusFilter, activeProjectId]);
   const { data: summary } = trpc.hr.summary.useQuery(undefined, { enabled: canUseHr });
   const { data: employees, isLoading: employeesLoading } = trpc.hr.employees.useQuery(employeeInput, { enabled: canUseHr });
   const { data: departments } = trpc.hr.departments.useQuery(undefined, { enabled: canUseHr });
@@ -176,7 +178,7 @@ export default function HrPayrollPage() {
   const { data: assignments } = trpc.hr.assignments.useQuery(assignmentInput, { enabled: canUseHr && Boolean(assignmentEmployeeId) });
 
   // Phase 2, 3 & 4 queries
-  const attendanceQueryInput = useMemo(() => ({ date: attendanceDate, roadId: attendanceRoadFilter ? Number(attendanceRoadFilter) : undefined }), [attendanceDate, attendanceRoadFilter]);
+  const attendanceQueryInput = useMemo(() => ({ date: attendanceDate, roadId: attendanceRoadFilter ? Number(attendanceRoadFilter) : undefined, projectId: activeProjectId }), [attendanceDate, attendanceRoadFilter, activeProjectId]);
   const { data: attendanceList } = trpc.hr.attendanceList.useQuery(attendanceQueryInput, { enabled: canUseHr });
   const { data: leaveRequests } = trpc.hr.leaveRequests.useQuery(undefined, { enabled: canUseHr });
   const { data: payrollRuns } = trpc.hr.payrollRuns.useQuery(undefined, { enabled: canUseHr });
