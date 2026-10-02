@@ -38,7 +38,9 @@ import {
   hrPayrollAdjustments, InsertHrPayrollAdjustment
   ,hrPayoutBatches, InsertHrPayoutBatch,
   hrPayoutLines, InsertHrPayoutLine,
-  hrGroupSettlements, InsertHrGroupSettlement
+  hrGroupSettlements, InsertHrGroupSettlement,
+  rateAnalyses, InsertRateAnalysis,
+  rateAnalysisComponents, InsertRateAnalysisComponent
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import mysql from "mysql2/promise";
@@ -2783,3 +2785,106 @@ export async function getRaBillExportData(params: {
   return result;
 }
 
+
+// ----------------- RATE ANALYSIS (QS Module) -----------------
+export async function getRateAnalyses(projectId?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select().from(rateAnalyses).orderBy(rateAnalyses.analysisNo);
+  const filtered = projectId ? rows.filter(r => r.projectId === projectId) : rows;
+  // Attach component count + total amount per analysis for the list view
+  const result = [];
+  for (const a of filtered) {
+    const comps = await db.select({
+      amount: rateAnalysisComponents.amount,
+    }).from(rateAnalysisComponents).where(eq(rateAnalysisComponents.analysisId, a.id));
+    const total = comps.reduce((s, c) => s + parseFloat(String(c.amount || "0")), 0);
+    const ohPct = parseFloat(String(a.overheadPct || "0"));
+    const pPct = parseFloat(String(a.profitPct || "0"));
+    const grand = total * (1 + ohPct / 100) * (1 + pPct / 100);
+    result.push({ ...a, componentCount: comps.length, totalAmount: total.toFixed(2), grandTotal: grand.toFixed(2) });
+  }
+  return result;
+}
+
+export async function getRateAnalysisWithComponents(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const [analysis] = await db.select().from(rateAnalyses).where(eq(rateAnalyses.id, id)).limit(1);
+  if (!analysis) return null;
+  const components = await db.select().from(rateAnalysisComponents)
+    .where(eq(rateAnalysisComponents.analysisId, id))
+    .orderBy(rateAnalysisComponents.sortOrder, rateAnalysisComponents.id);
+  return { analysis, components };
+}
+
+export async function createRateAnalysis(data: InsertRateAnalysis) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  const res = await db.insert(rateAnalyses).values(data);
+  const insertId = (res as any)[0]?.insertId;
+  if (insertId) {
+    const [row] = await db.select().from(rateAnalyses).where(eq(rateAnalyses.id, insertId)).limit(1);
+    return row;
+  }
+  return null;
+}
+
+export async function updateRateAnalysis(id: number, data: Partial<InsertRateAnalysis>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  await db.update(rateAnalyses).set(data).where(eq(rateAnalyses.id, id));
+  const [row] = await db.select().from(rateAnalyses).where(eq(rateAnalyses.id, id)).limit(1);
+  return row;
+}
+
+export async function deleteRateAnalysis(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  await db.delete(rateAnalysisComponents).where(eq(rateAnalysisComponents.analysisId, id));
+  return db.delete(rateAnalyses).where(eq(rateAnalyses.id, id));
+}
+
+export async function addRateAnalysisComponent(data: InsertRateAnalysisComponent) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  // Auto-compute amount = coefficient x rate
+  const coeff = parseFloat(String(data.coefficient || "0"));
+  const rate = parseFloat(String(data.rate || "0"));
+  const withAmount = { ...data, amount: (coeff * rate).toFixed(2) };
+  return db.insert(rateAnalysisComponents).values(withAmount);
+}
+
+export async function updateRateAnalysisComponent(id: number, data: Partial<InsertRateAnalysisComponent>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  const [existing] = await db.select().from(rateAnalysisComponents).where(eq(rateAnalysisComponents.id, id)).limit(1);
+  if (!existing) throw new Error("Component not found");
+  const coeff = data.coefficient !== undefined ? parseFloat(String(data.coefficient)) : parseFloat(String(existing.coefficient || "0"));
+  const rate = data.rate !== undefined ? parseFloat(String(data.rate)) : parseFloat(String(existing.rate || "0"));
+  const withAmount = { ...data, amount: (coeff * rate).toFixed(2) };
+  return db.update(rateAnalysisComponents).set(withAmount).where(eq(rateAnalysisComponents.id, id));
+}
+
+export async function deleteRateAnalysisComponent(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  return db.delete(rateAnalysisComponents).where(eq(rateAnalysisComponents.id, id));
+}
+
+/** Seed 3 empty SOR template analyses (headers only, zero components — user fills from SOR). Idempotent. */
+export async function seedRateAnalysisTemplates(projectId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  const existing = await db.select().from(rateAnalyses).where(eq(rateAnalyses.projectId, projectId)).limit(1);
+  if (existing.length > 0) return { seeded: 0, message: "Templates already exist for this project." };
+  const templates: InsertRateAnalysis[] = [
+    { projectId, analysisNo: "RA-GSB-001", description: "Granular Sub-Base (GSB) — grading as per MORTH Table 400-1", unit: "Cum", sorRef: "MORTH 401", leadKm: "0.00", overheadPct: "0.00", profitPct: "0.00", status: "Draft", remarks: "Fill coefficients from SOR" },
+    { projectId, analysisNo: "RA-WMM-001", description: "Wet Mix Macadam (WMM) — as per MORTH 406", unit: "Cum", sorRef: "MORTH 406", leadKm: "0.00", overheadPct: "0.00", profitPct: "0.00", status: "Draft", remarks: "Fill coefficients from SOR" },
+    { projectId, analysisNo: "RA-PCC-001", description: "PCC 1:4:8 in foundation — as per MORTH 409", unit: "Cum", sorRef: "MORTH 409", leadKm: "0.00", overheadPct: "0.00", profitPct: "0.00", status: "Draft", remarks: "Fill coefficients from SOR" },
+  ];
+  for (const t of templates) {
+    await db.insert(rateAnalyses).values(t);
+  }
+  return { seeded: templates.length, message: `Seeded ${templates.length} SOR template analyses.` };
+}
