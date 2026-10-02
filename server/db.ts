@@ -1645,7 +1645,15 @@ export async function getWorkOrders(roadId?: number, subcontractorId?: number, p
     }
   }
 
-  return filtered.map((r) => ({ ...r, items: itemsByWo[r.wo.id] || [] }));
+  return filtered.map((r) => {
+    const its = itemsByWo[r.wo.id] || [];
+    // Σ(qty × rate) across BOQ line items — preferred awarded display when items exist
+    const itemsTotal = its.reduce(
+      (s, it) => s + parseFloat(String(it.quantity || 0)) * parseFloat(String(it.rate || 0)),
+      0
+    );
+    return { ...r, items: its, itemsTotal, itemsCount: its.length };
+  });
 }
 
 export async function createWorkOrder(data: InsertWorkOrder) {
@@ -1720,12 +1728,18 @@ export async function getWorkOrderDocument(workOrderId: number) {
   const roadRows = await db.select().from(roads).where(eq(roads.id, wo.roadId)).limit(1);
   const projRows = await db.select().from(projects).where(eq(projects.id, wo.projectId)).limit(1);
   const items = await getWorkOrderItems(workOrderId);
+  const itemsTotal = items.reduce(
+    (s, it) => s + parseFloat(String(it.quantity || 0)) * parseFloat(String(it.rate || 0)),
+    0
+  );
   return {
     wo,
     subcontractor: subRows[0] || null,
     road: roadRows[0] || null,
     project: projRows[0] || null,
     items,
+    itemsTotal,
+    itemsCount: items.length,
   };
 }
 
@@ -1748,7 +1762,9 @@ export async function getSubcontractorLedger(subcontractorId: number, roadId?: n
 
   for (const r of wos) {
     const wo = r.wo;
-    totalAwarded += parseFloat(String(wo.awardedAmount || 0));
+    // Prefer BOQ line-items total when the WO has items; else header awardedAmount
+    const awardedVal = (r.itemsCount || 0) > 0 ? (r.itemsTotal || 0) : parseFloat(String(wo.awardedAmount || 0));
+    totalAwarded += awardedVal;
     totalPaid += parseFloat(String(wo.paidAmount || 0));
     totalRetention += parseFloat(String(wo.retentionAmount || 0));
     const execQty = parseFloat(String(wo.executedQuantity || 0));
