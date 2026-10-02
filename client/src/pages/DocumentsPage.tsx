@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { trpc } from "../lib/trpc";
+import { useActiveProject } from "../components/ProjectContext";
 import {
   FolderOpen,
   Plus,
@@ -48,13 +49,14 @@ export default function DocumentsPage() {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [remarks, setRemarks] = useState("Approved Good For Construction (GFC).");
 
+  const { projectId: activeProjectId } = useActiveProject();
+
   const { data: documents, isLoading, refetch } = trpc.documents.list.useQuery({
+    projectId: activeProjectId,
     category: selectedCategory !== "All Categories" ? selectedCategory : undefined,
   });
 
-  const { data: roads } = trpc.roads.list.useQuery();
-  const { data: projects } = trpc.projects.list.useQuery();
-  const activeProjectId = projects?.[0]?.id || 1;
+  const { data: roads } = trpc.roads.list.useQuery({ projectId: activeProjectId });
 
   const createDoc = trpc.documents.create.useMutation({
     onSuccess: () => {
@@ -320,7 +322,7 @@ export default function DocumentsPage() {
                 disabled={!title || !fileUrl}
                 onClick={() => {
                   createDoc.mutate({
-                    projectId: activeProjectId,
+                    projectId: activeProjectId as number,
                     roadId,
                     category,
                     title,
