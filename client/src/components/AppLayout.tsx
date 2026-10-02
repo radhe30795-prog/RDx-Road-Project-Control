@@ -46,7 +46,7 @@ import { canAccessPage } from "@shared/roles";
 import { ProjectProvider, useActiveProject } from "./ProjectContext";
 
 // Role Context for dynamic switching and testing
-export type UserRole = "user" | "admin" | "project_manager" | "qs_billing_engineer" | "site_engineer" | "qa_qc_engineer" | "hr_payroll_manager";
+export type UserRole = "user" | "admin" | "project_manager" | "qs_billing_engineer" | "site_engineer" | "qa_qc_engineer" | "hr_payroll_manager" | "site_coordinator";
 
 interface RoleContextType {
   role: UserRole;
@@ -70,6 +70,7 @@ const ROLE_OPTIONS: { id: UserRole; label: string; badgeColor: string; descripti
   { id: "site_engineer", label: "Site Engineer", badgeColor: "bg-amber-100 text-amber-800 border-amber-300", description: "Daily site progress, manpower, equipment & activities" },
   { id: "qa_qc_engineer", label: "QA / QC Engineer", badgeColor: "bg-rose-100 text-rose-800 border-rose-300", description: "Field/Lab testing, tolerances & non-conformance action" },
   { id: "hr_payroll_manager", label: "HR / Payroll Manager", badgeColor: "bg-cyan-100 text-cyan-800 border-cyan-300", description: "Employee master, assignments & payroll inputs" },
+  { id: "site_coordinator", label: "Site Coordinator", badgeColor: "bg-violet-100 text-violet-800 border-violet-300", description: "HR, Material, DPR & Machinery — site operations" },
 ];
 
 function AppLayoutInner({ children }: { children: React.ReactNode }) {
@@ -97,7 +98,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
     ...(role === "admin" ? [{ href: "/team", label: "Team & Roles", icon: UsersRound, badge: "Admin" }] : []),
     ...(role === "admin" ? [{ href: "/import", label: "Excel Import Center", icon: FileUp, badge: "Admin" }] : []),
     ...(role === "admin" ? [{ href: "/admin-edit", label: "Central Edit Panel", icon: SlidersHorizontal, badge: "Admin" }] : []),
-    ...(["admin", "hr_payroll_manager"].includes(role) ? [{ href: "/hr", label: "HR & Payroll", icon: UsersRound, highlight: true }] : []),
+    ...(["admin", "hr_payroll_manager", "site_coordinator"].includes(role) ? [{ href: "/hr", label: "HR & Payroll", icon: UsersRound, highlight: true }] : []),
     { href: "/", label: "Executive Dashboard", icon: LayoutDashboard, badge: stats?.overallPhysicalProgress ? `${stats.overallPhysicalProgress}%` : undefined },
     { href: "/roads", label: "14 Roads Tracker", icon: Compass, count: 14 },
     { href: "/structures", label: "पुल-पुलिया & Protection Register", icon: Boxes, highlight: true },
