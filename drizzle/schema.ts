@@ -114,6 +114,8 @@ export const activities = mysqlTable("activities", {
   predecessorActivity: varchar("predecessorActivity", { length: 255 }),
   dependencyType: varchar("dependencyType", { length: 50 }).default("FS"),
   remarks: text("remarks"),
+  isManual: boolean("isManual").default(false).notNull(),
+  manualNote: text("manualNote"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
