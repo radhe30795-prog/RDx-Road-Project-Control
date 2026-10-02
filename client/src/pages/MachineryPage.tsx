@@ -311,10 +311,10 @@ export default function MachineryPage() {
             </button>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="bg-slate-50 text-slate-500 uppercase text-[10px]">
+        <div className="overflow-auto boq-table-scroll" style={{ maxHeight: "50vh" }}>
+          <table className="w-full min-w-[1100px] text-left text-xs">
+            <thead className="bg-slate-50 sticky top-0 z-10">
+              <tr className="text-slate-500 uppercase text-[10px]">
                 <th className="p-3">Machine</th>
                 <th className="p-3">Document</th>
                 <th className="p-3">Doc No.</th>
@@ -420,9 +420,9 @@ export default function MachineryPage() {
 
       {/* Machinery Logs Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-900 text-white font-semibold uppercase tracking-wider text-[10px]">
+        <div className="overflow-auto boq-table-scroll" style={{ maxHeight: "60vh" }}>
+          <table className="w-full min-w-[1100px] text-left text-xs">
+            <thead className="bg-slate-900 text-white font-semibold uppercase tracking-wider text-[10px] sticky top-0 z-10">
               <tr>
                 <th className="p-3">Log No. & Date</th>
                 <th className="p-3">Equipment Asset</th>
