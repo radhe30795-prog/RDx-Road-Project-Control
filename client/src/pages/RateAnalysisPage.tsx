@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { trpc } from "../lib/trpc";
+import { useActiveProject } from "../components/ProjectContext";
 import {
   Calculator,
   Plus,
@@ -37,8 +38,7 @@ export default function RateAnalysisPage() {
   const { role } = useRole();
   const canEdit = role === "admin" || role === "project_manager" || role === "qs_billing_engineer";
 
-  const { data: projects } = trpc.projects.list.useQuery();
-  const activeProjectId = projects?.[0]?.id;
+  const { projectId: activeProjectId } = useActiveProject();
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
