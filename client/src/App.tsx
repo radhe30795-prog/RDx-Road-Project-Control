@@ -26,6 +26,7 @@ import SignoffPage from "./pages/SignoffPage";
 import ReportsPage from "./pages/ReportsPage";
 import BillingPage from "./pages/BillingPage";
 import RateAnalysisPage from "./pages/RateAnalysisPage";
+import BbsPage from "./pages/BbsPage";
 import ProjectionPage from "./pages/ProjectionPage";
 import HindrancePage from "./pages/HindrancePage";
 import QaQcPage from "./pages/QaQcPage";
@@ -103,6 +104,7 @@ function Router() {
         <GuardedRoute path="/reports" component={ReportsPage} />
         <GuardedRoute path="/billing" component={BillingPage} />
         <GuardedRoute path="/rate-analysis" component={RateAnalysisPage} />
+        <GuardedRoute path="/bbs" component={BbsPage} />
         <GuardedRoute path="/projection" component={ProjectionPage} />
         <GuardedRoute path="/hindrances" component={HindrancePage} />
         <GuardedRoute path="/qa-qc" component={QaQcPage} />
