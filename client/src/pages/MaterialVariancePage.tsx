@@ -176,9 +176,9 @@ export default function MaterialVariancePage() {
 
       {/* Variance Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-900 text-white font-semibold uppercase tracking-wider text-[10px]">
+        <div className="overflow-auto boq-table-scroll" style={{ maxHeight: "60vh" }}>
+          <table className="w-full min-w-[1100px] text-left text-xs">
+            <thead className="sticky top-0 z-10 bg-slate-900 text-white font-semibold uppercase tracking-wider text-[10px]">
               <tr>
                 <th className="p-3">Audit No. & Period</th>
                 <th className="p-3">Road Stretch</th>
