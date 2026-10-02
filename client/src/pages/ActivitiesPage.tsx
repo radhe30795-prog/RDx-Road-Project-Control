@@ -84,6 +84,13 @@ export default function ActivitiesPage() {
     },
   });
 
+  const unlockManual = trpc.activities.unlockManual.useMutation({
+    onSuccess: () => {
+      refetch();
+      setIsEditOpen(false);
+    },
+  });
+
   const resetForm = () => {
     setTaskId("");
     setActivityName("");
@@ -239,6 +246,11 @@ export default function ActivitiesPage() {
                     </td>
                     <td className="py-3 px-4 font-medium text-slate-900 max-w-xs">
                       {a.activityName}
+                      {a.isManual && (
+                        <span className="ml-1 inline-block" title="Manually locked — sync will not overwrite">
+                          🔒
+                        </span>
+                      )}
                       {a.remarks && <span className="block text-[10px] text-slate-400 truncate">{a.remarks}</span>}
                     </td>
                     <td className="py-3 px-4 text-slate-600 font-mono text-[11px]">
@@ -470,6 +482,29 @@ export default function ActivitiesPage() {
               Update Activity: {selectedActivity.taskId}
             </h3>
             <p className="text-xs text-slate-500 font-medium">{selectedActivity.activityName}</p>
+
+            {selectedActivity.isManual ? (
+              <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                <span className="text-xs font-medium text-amber-800">
+                  🔒 Manual entry — sync will not overwrite this.
+                </span>
+                <button
+                  onClick={() => {
+                    unlockManual.mutate({ id: selectedActivity.id });
+                  }}
+                  disabled={unlockManual.isPending}
+                  className="text-xs font-semibold text-amber-700 underline hover:text-amber-900 disabled:opacity-50"
+                >
+                  {unlockManual.isPending ? "Unlocking..." : "Unlock for sync"}
+                </button>
+              </div>
+            ) : (
+              <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                <span className="text-[11px] text-slate-500">
+                  Saving here will lock this activity — future syncs will not overwrite it.
+                </span>
+              </div>
+            )}
 
             <div className="space-y-3 text-xs">
               <div>
