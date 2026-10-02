@@ -1356,6 +1356,7 @@ export const appRouter = router({
         srNo: z.number().default(1),
         description: z.string(),
         unit: z.string(),
+        quantity: z.string().default("1.000"),
         rate: z.string().default("0.00"),
         sortOrder: z.number().default(0),
       }))
@@ -1368,6 +1369,7 @@ export const appRouter = router({
         srNo: z.number().optional(),
         description: z.string().optional(),
         unit: z.string().optional(),
+        quantity: z.string().optional(),
         rate: z.string().optional(),
         sortOrder: z.number().optional(),
       }))
