@@ -221,7 +221,7 @@ export default function WorkOrderDocument({ workOrderId, onClose }: { workOrderI
   const [tab, setTab] = useState<"doc" | "items" | "terms">("doc");
   const [lang, setLang] = useState<WoLang>("hi");
   const [editTerms, setEditTerms] = useState<WoTermSection[] | null>(null);
-  const [newItem, setNewItem] = useState({ description: "", unit: "Nos", quantity: "1", rate: "" });
+  const [newItem, setNewItem] = useState({ description: "", unit: "Nos", rate: "" });
   const [editingItem, setEditingItem] = useState<any | null>(null);
 
   const { data, isLoading, refetch } = trpc.subcontractors.workOrderDocument.useQuery({ workOrderId });
@@ -320,11 +320,10 @@ export default function WorkOrderDocument({ workOrderId, onClose }: { workOrderI
       srNo,
       description: newItem.description.trim(),
       unit: newItem.unit,
-      quantity: newItem.quantity || "1.000",
       rate: newItem.rate || "0.00",
       sortOrder: srNo,
     });
-    setNewItem({ description: "", unit: "Nos", quantity: "1", rate: "" });
+    setNewItem({ description: "", unit: "Nos", rate: "" });
     toast.success("आइटम जोड़ा गया!");
     refetch();
   };
@@ -335,7 +334,6 @@ export default function WorkOrderDocument({ workOrderId, onClose }: { workOrderI
       id: editingItem.id,
       description: editingItem.description,
       unit: editingItem.unit,
-      quantity: editingItem.quantity,
       rate: editingItem.rate,
       srNo: Number(editingItem.srNo) || 1,
     });
@@ -350,11 +348,6 @@ export default function WorkOrderDocument({ workOrderId, onClose }: { workOrderI
     refetch();
   };
 
-  const itemsTotal = items.reduce(
-    (s: number, it: any) => s + parseFloat(String(it.quantity || 0)) * parseFloat(String(it.rate || 0)),
-    0
-  );
-
   const boqTable = (
     <table className="w-full border-collapse border border-slate-800 text-[13px] my-2">
       <thead>
@@ -362,48 +355,31 @@ export default function WorkOrderDocument({ workOrderId, onClose }: { workOrderI
           <th className="border border-slate-800 px-2 py-1.5 w-14">{T.sn}</th>
           <th className="border border-slate-800 px-2 py-1.5 text-left">{T.workType}</th>
           <th className="border border-slate-800 px-2 py-1.5 w-20">{T.unit}</th>
-          <th className="border border-slate-800 px-2 py-1.5 w-20">{T.qty}</th>
           <th className="border border-slate-800 px-2 py-1.5 w-28">{T.rate}</th>
-          <th className="border border-slate-800 px-2 py-1.5 w-32">{T.amount}</th>
         </tr>
       </thead>
       <tbody>
         {items.length === 0 ? (
           <tr>
-            <td colSpan={6} className="border border-slate-800 px-2 py-3 text-center text-slate-500">
+            <td colSpan={4} className="border border-slate-800 px-2 py-3 text-center text-slate-500">
               {T.noItems}
             </td>
           </tr>
         ) : (
           <>
             {items.map((it: any, i: number) => {
-              const q = parseFloat(String(it.quantity || 0));
               const r = parseFloat(String(it.rate || 0));
               return (
                 <tr key={it.id}>
                   <td className="border border-slate-800 px-2 py-1.5 text-center">{it.srNo ?? i + 1}</td>
                   <td className="border border-slate-800 px-2 py-1.5">{it.description}</td>
                   <td className="border border-slate-800 px-2 py-1.5 text-center">{it.unit}</td>
-                  <td className="border border-slate-800 px-2 py-1.5 text-center font-mono">
-                    {q.toLocaleString("en-IN", { minimumFractionDigits: 3 })}
-                  </td>
                   <td className="border border-slate-800 px-2 py-1.5 text-right font-mono">
                     {r.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="border border-slate-800 px-2 py-1.5 text-right font-mono font-semibold">
-                    {(q * r).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                   </td>
                 </tr>
               );
             })}
-            <tr className="bg-slate-100">
-              <td colSpan={5} className="border border-slate-800 px-2 py-1.5 text-right font-bold">
-                {T.total}
-              </td>
-              <td className="border border-slate-800 px-2 py-1.5 text-right font-mono font-bold">
-                ₹{itemsTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-              </td>
-            </tr>
           </>
         )}
       </tbody>
@@ -438,10 +414,9 @@ export default function WorkOrderDocument({ workOrderId, onClose }: { workOrderI
       {tab === "items" && (
         <div className="no-print p-4 overflow-y-auto space-y-4">
           <form onSubmit={handleAddItem} className="bg-amber-50 border border-amber-200 rounded-xl p-3 grid grid-cols-12 gap-2 text-xs">
-            <input value={newItem.description} onChange={(e) => setNewItem({ ...newItem, description: e.target.value })} placeholder="कार्य का विवरण *" className="col-span-5 p-2 border border-slate-200 rounded-lg" required />
+            <input value={newItem.description} onChange={(e) => setNewItem({ ...newItem, description: e.target.value })} placeholder="कार्य का विवरण *" className="col-span-6 p-2 border border-slate-200 rounded-lg" required />
             <input value={newItem.unit} onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })} placeholder="इकाई" className="col-span-2 p-2 border border-slate-200 rounded-lg" />
-            <input value={newItem.quantity} onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })} placeholder="मात्रा" type="number" step="0.001" className="col-span-2 p-2 border border-slate-200 rounded-lg" />
-            <input value={newItem.rate} onChange={(e) => setNewItem({ ...newItem, rate: e.target.value })} placeholder="दर ₹" type="number" step="0.01" className="col-span-2 p-2 border border-slate-200 rounded-lg" />
+            <input value={newItem.rate} onChange={(e) => setNewItem({ ...newItem, rate: e.target.value })} placeholder="दर ₹" type="number" step="0.01" className="col-span-3 p-2 border border-slate-200 rounded-lg" />
             <button className="col-span-1 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold">+ जोड़ें</button>
           </form>
           <div className="space-y-2">
@@ -452,7 +427,6 @@ export default function WorkOrderDocument({ workOrderId, onClose }: { workOrderI
                     <input value={editingItem.srNo} onChange={(e) => setEditingItem({ ...editingItem, srNo: e.target.value })} type="number" className="w-12 p-1.5 border rounded" />
                     <input value={editingItem.description} onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })} className="flex-1 p-1.5 border rounded" />
                     <input value={editingItem.unit} onChange={(e) => setEditingItem({ ...editingItem, unit: e.target.value })} className="w-20 p-1.5 border rounded" />
-                    <input value={editingItem.quantity} onChange={(e) => setEditingItem({ ...editingItem, quantity: e.target.value })} type="number" step="0.001" className="w-20 p-1.5 border rounded" />
                     <input value={editingItem.rate} onChange={(e) => setEditingItem({ ...editingItem, rate: e.target.value })} type="number" step="0.01" className="w-24 p-1.5 border rounded" />
                     <button className="px-2 py-1.5 bg-emerald-600 text-white rounded font-bold">✓</button>
                     <button type="button" onClick={() => setEditingItem(null)} className="px-2 py-1.5 bg-slate-200 rounded font-bold">✕</button>
@@ -462,10 +436,8 @@ export default function WorkOrderDocument({ workOrderId, onClose }: { workOrderI
                     <span className="w-8 text-center font-bold text-slate-500">{it.srNo}</span>
                     <span className="flex-1 font-medium text-slate-800">{it.description}</span>
                     <span className="text-slate-500">{it.unit}</span>
-                    <span className="font-mono text-slate-600 w-16 text-right">{parseFloat(String(it.quantity || 0)).toLocaleString("en-IN")}</span>
                     <span className="font-mono font-bold w-24 text-right">₹{Number(it.rate || 0).toLocaleString("en-IN")}</span>
-                    <span className="font-mono text-emerald-700 font-bold w-24 text-right">₹{(parseFloat(String(it.quantity || 0)) * parseFloat(String(it.rate || 0))).toLocaleString("en-IN")}</span>
-                    <button onClick={() => setEditingItem({ ...it, quantity: String(it.quantity ?? "1"), rate: String(it.rate ?? ""), srNo: String(it.srNo ?? 1) })} className="px-2 py-1 bg-amber-50 border border-amber-200 text-amber-700 rounded font-bold">✏️</button>
+                    <button onClick={() => setEditingItem({ ...it, rate: String(it.rate ?? ""), srNo: String(it.srNo ?? 1) })} className="px-2 py-1 bg-amber-50 border border-amber-200 text-amber-700 rounded font-bold">✏️</button>
                     <button onClick={() => handleDeleteItem(it.id)} className="px-2 py-1 bg-red-50 border border-red-200 text-red-700 rounded font-bold">🗑️</button>
                   </>
                 )}
