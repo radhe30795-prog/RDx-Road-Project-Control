@@ -12,6 +12,7 @@ export const APP_ROLES = [
   "site_engineer",
   "qa_qc_engineer",
   "hr_payroll_manager",
+  "site_coordinator",
 ] as const;
 
 export type AppRole = (typeof APP_ROLES)[number];
@@ -24,6 +25,7 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   site_engineer: "Site Engineer / Supervisor",
   qa_qc_engineer: "QA / QC Engineer",
   hr_payroll_manager: "HR / Payroll Manager",
+  site_coordinator: "Site Coordinator",
 };
 
 /**
@@ -100,6 +102,22 @@ export const ROLE_PAGES: Record<AppRole, string[]> = {
   ],
 
   hr_payroll_manager: ["/", "/my-apps", "/hr"],
+
+  // Site Coordinator: HR + Material + DPR + Machinery (site-level ops, no commercial data)
+  site_coordinator: [
+    "/",
+    "/my-apps",
+    "/roads",
+    "/hr",
+    "/materials",
+    "/inventory",
+    "/daily-progress",
+    "/machinery",
+    "/activities",
+    "/hindrances",
+    "/documents",
+    "/mobile-field",
+  ],
 
   user: ["/", "/my-apps"],
 };
