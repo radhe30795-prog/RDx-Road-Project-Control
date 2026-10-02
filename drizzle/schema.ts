@@ -569,6 +569,7 @@ export const workOrders = mysqlTable("work_orders", {
   status: mysqlEnum("status", ["Draft", "Issued", "In Progress", "Completed", "Closed", "On Hold"]).default("Draft").notNull(),
   remarks: text("remarks"),
   termsOverride: text("termsOverride"),
+  docLang: varchar("docLang", { length: 10 }).default("hi").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
