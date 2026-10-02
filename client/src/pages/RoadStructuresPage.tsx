@@ -54,6 +54,10 @@ export default function RoadStructuresPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>("All Statuses");
   const [search, setSearch] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [editingStructure, setEditingStructure] = useState<any | null>(null);
+  const [editBillableQty, setEditBillableQty] = useState("");
+  const [editStatus, setEditStatus] = useState("");
+  const [editRemarks, setEditRemarks] = useState("");
 
   // Photo viewer / gallery modal states
   const [activeStructureForPhotos, setActiveStructureForPhotos] = useState<any | null>(null);
@@ -112,6 +116,32 @@ export default function RoadStructuresPage() {
       toast.success("Structure status updated");
     },
   });
+
+  function openEditStructure(s: any) {
+    setEditingStructure(s);
+    setEditBillableQty(String(s.billableQuantity || "0"));
+    setEditStatus(s.status || "Not Started");
+    setEditRemarks(s.remarks || "");
+  }
+
+  function handleUpdateStructure(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!editingStructure) return;
+    const qty = parseFloat(editBillableQty || "0");
+    const total = parseFloat(String(editingStructure.quantity || "0"));
+    // Auto-set status based on quantity
+    let autoStatus = editStatus;
+    if (qty >= total && total > 0) autoStatus = "Completed";
+    else if (qty > 0) autoStatus = "In Progress";
+    else autoStatus = "Not Started";
+    updateStructureMutation.mutate({
+      id: editingStructure.id,
+      billableQuantity: editBillableQty,
+      status: autoStatus as any,
+      remarks: editRemarks,
+    });
+    setEditingStructure(null);
+  }
 
   const uploadPhotoMutation = trpc.structures.uploadPhoto.useMutation({
     onSuccess: (data) => {
@@ -432,9 +462,9 @@ export default function RoadStructuresPage() {
           <span className="text-[11px] text-slate-500">Click Photo button to view or attach site photos</span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-slate-900 text-white font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
+        <div className="overflow-auto boq-table-scroll" style={{ maxHeight: "60vh" }}>
+          <table className="w-full text-left text-xs text-slate-600 min-w-[1100px]">
+            <thead className="bg-slate-900 text-white font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200 sticky top-0 z-10">
               <tr>
                 <th className="py-3 px-4">Structure No & Road</th>
                 <th className="py-3 px-4">Category</th>
@@ -522,22 +552,31 @@ export default function RoadStructuresPage() {
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <select
-                        value={s.status}
-                        onChange={(e) => {
-                          updateStructureMutation.mutate({
-                            id: s.id,
-                            status: e.target.value as any,
-                            billableQuantity: e.target.value === "Completed" ? String(s.quantity) : s.billableQuantity,
-                          });
-                        }}
-                        className="p-1 border border-slate-200 rounded text-[10px] font-bold bg-white text-slate-700"
-                      >
-                        <option value="Not Started">Not Started</option>
-                        <option value="In Progress">In Progress</option>
-                        <option value="Completed">Completed</option>
-                        <option value="On Hold">On Hold</option>
-                      </select>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openEditStructure(s)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-[10px] font-bold transition"
+                          title="Edit completion quantity"
+                        >
+                          ✏️ Edit
+                        </button>
+                        <select
+                          value={s.status}
+                          onChange={(e) => {
+                            updateStructureMutation.mutate({
+                              id: s.id,
+                              status: e.target.value as any,
+                              billableQuantity: e.target.value === "Completed" ? String(s.quantity) : s.billableQuantity,
+                            });
+                          }}
+                          className="p-1 border border-slate-200 rounded text-[10px] font-bold bg-white text-slate-700"
+                        >
+                          <option value="Not Started">Not Started</option>
+                          <option value="In Progress">In Progress</option>
+                          <option value="Completed">Completed</option>
+                          <option value="On Hold">On Hold</option>
+                        </select>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -918,6 +957,83 @@ export default function RoadStructuresPage() {
                   className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold shadow"
                 >
                   {createStructureMutation.isPending ? "Adding..." : "Save to Register"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Structure Completion Modal */}
+      {editingStructure && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                ✏️ Edit Completion
+              </h2>
+              <button onClick={() => setEditingStructure(null)} className="text-slate-400 hover:text-slate-600 text-sm font-bold">
+                ✕
+              </button>
+            </div>
+            <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg p-3 text-amber-800">
+              <strong>{editingStructure.structureNo}</strong> • {editingStructure.structureType}
+              <br />
+              <span className="text-slate-600">Total Scope: <strong className="font-mono">{editingStructure.quantity} {editingStructure.unit}</strong></span>
+            </div>
+            <form onSubmit={handleUpdateStructure} className="space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-slate-700">Completed Quantity *</label>
+                <input
+                  type="number" step="0.001" required
+                  value={editBillableQty}
+                  onChange={(e) => setEditBillableQty(e.target.value)}
+                  className="mt-1 w-full p-2.5 border border-emerald-200 rounded-lg bg-emerald-50 font-mono font-bold text-emerald-700"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Kitna complete hua hai — yahi se update karo.
+                  {parseFloat(editBillableQty || "0") > 0 && parseFloat(String(editingStructure.quantity || "0")) > 0 && (
+                    <span className="font-bold text-emerald-600">
+                      {" "}({((parseFloat(editBillableQty) / parseFloat(String(editingStructure.quantity))) * 100).toFixed(1)}% complete)
+                    </span>
+                  )}
+                </p>
+              </div>
+              <div>
+                <label className="font-bold text-slate-700">Status</label>
+                <select
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value)}
+                  className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50"
+                >
+                  <option value="Not Started">Not Started</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Completed">Completed</option>
+                  <option value="On Hold">On Hold</option>
+                </select>
+                <p className="text-[10px] text-slate-500 mt-1">Quantity se auto-set hoga (100% = Completed)</p>
+              </div>
+              <div>
+                <label className="font-bold text-slate-700">Remarks</label>
+                <textarea
+                  rows={2} value={editRemarks}
+                  onChange={(e) => setEditRemarks(e.target.value)}
+                  placeholder="Optional notes..."
+                  className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50"
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
+                <button
+                  type="button" onClick={() => setEditingStructure(null)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold shadow"
+                >
+                  Update
                 </button>
               </div>
             </form>
