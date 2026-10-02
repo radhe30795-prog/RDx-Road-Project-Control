@@ -1315,6 +1315,7 @@ export const appRouter = router({
         targetDate: z.string().optional(),
         status: z.enum(["Draft", "Issued", "In Progress", "Completed", "Closed", "On Hold"]).optional(),
         remarks: z.string().optional(),
+        termsOverride: z.string().nullable().optional(),
       }))
       .mutation(async ({ input }) => {
         const { id, ...data } = input;
@@ -1341,6 +1342,48 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         const { id, ...data } = input;
         return db.updateSubcontractor(id, data);
+      }),
+    // WO BOQ items (multiple rate items per WO — Hindi WO document)
+    workOrderItemsList: publicProcedure
+      .input(z.object({ workOrderId: z.number() }))
+      .query(async ({ input }) => {
+        return db.getWorkOrderItems(input.workOrderId);
+      }),
+    addWorkOrderItem: publicProcedure
+      .input(z.object({
+        workOrderId: z.number(),
+        srNo: z.number().default(1),
+        description: z.string(),
+        unit: z.string(),
+        rate: z.string().default("0.00"),
+        sortOrder: z.number().default(0),
+      }))
+      .mutation(async ({ input }) => {
+        return db.createWorkOrderItem(input);
+      }),
+    updateWorkOrderItem: publicProcedure
+      .input(z.object({
+        id: z.number(),
+        srNo: z.number().optional(),
+        description: z.string().optional(),
+        unit: z.string().optional(),
+        rate: z.string().optional(),
+        sortOrder: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        return db.updateWorkOrderItem(id, data);
+      }),
+    deleteWorkOrderItem: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        return db.deleteWorkOrderItem(input.id);
+      }),
+    // Full Hindi WO document data
+    workOrderDocument: publicProcedure
+      .input(z.object({ workOrderId: z.number() }))
+      .query(async ({ input }) => {
+        return db.getWorkOrderDocument(input.workOrderId);
       }),
   }),
 
