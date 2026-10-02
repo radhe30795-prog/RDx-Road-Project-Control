@@ -41,7 +41,9 @@ import {
   hrPayoutLines, InsertHrPayoutLine,
   hrGroupSettlements, InsertHrGroupSettlement,
   rateAnalyses, InsertRateAnalysis,
-  rateAnalysisComponents, InsertRateAnalysisComponent
+  rateAnalysisComponents, InsertRateAnalysisComponent,
+  subcontractorBills, InsertSubcontractorBill,
+  subcontractorBillItems, InsertSubcontractorBillItem
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import mysql from "mysql2/promise";
@@ -1786,6 +1788,14 @@ export async function getSubcontractorLedger(subcontractorId: number, roadId?: n
   }
   payments.sort((a, b) => (a.date < b.date ? 1 : -1));
 
+  // RA bills for this subcontractor's work orders (in scope)
+  const woIds = wos.map((r) => r.wo.id);
+  let bills: Awaited<ReturnType<typeof getSubcontractorBills>> = [];
+  if (woIds.length > 0) {
+    const allBills = await getSubcontractorBills(undefined, subcontractorId, projectId);
+    bills = allBills.filter((b) => woIds.includes(b.bill.workOrderId as number));
+  }
+
   return {
     subcontractor: sub,
     workOrders: wos,
@@ -1798,8 +1808,52 @@ export async function getSubcontractorLedger(subcontractorId: number, roadId?: n
       totalRetention,
     },
     payments,
+    bills,
   };
 }
+
+// ----------------- SUBCONTRACTOR RA BILLS (with retention/security deduction) -----------------
+/** Recompute bill totals from items. Final bill => retention forced to 0. */
+export async function getSubcontractorBills(workOrderId?: number, subcontractorId?: number, projectId?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({
+    bill: subcontractorBills,
+    wo: workOrders,
+  }).from(subcontractorBills)
+    .leftJoin(workOrders, eq(subcontractorBills.workOrderId, workOrders.id))
+    .orderBy(desc(subcontractorBills.id));
+  const filtered = rows.filter((r) => {
+    if (workOrderId && r.bill.workOrderId !== workOrderId) return false;
+    if (subcontractorId && r.bill.subcontractorId !== subcontractorId) return false;
+    if (projectId && r.bill.projectId !== projectId) return false;
+    return true;
+  });
+  // Attach items per bill (single batched query)
+  const billIds = filtered.map((r) => r.bill.id);
+  let itemsByBill: Record<number, typeof subcontractorBillItems.$inferSelect[]> = {};
+  if (billIds.length > 0) {
+    const { inArray } = await import("drizzle-orm");
+    const allItems = await db.select().from(subcontractorBillItems)
+      .where(inArray(subcontractorBillItems.billId, billIds))
+      .orderBy(subcontractorBillItems.sortOrder, subcontractorBillItems.id);
+    for (const it of allItems) {
+      const key = it.billId as number;
+      if (!itemsByBill[key]) itemsByBill[key] = [];
+      itemsByBill[key].push(it);
+    }
+  }
+  return filtered.map((r) => ({ ...r, items: itemsByBill[r.bill.id] || [] }));
+}
+
+export async function getSubcontractorBillItems(billId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(subcontractorBillItems)
+    .where(eq(subcontractorBillItems.billId, billId))
+    .orderBy(subcontractorBillItems.sortOrder, subcontractorBillItems.id);
+}
+
 
 // ----------------- PLANT, MACHINERY & FUEL LOGBOOK -----------------
 export async function getMachineryAssets(projectId?: number) {
