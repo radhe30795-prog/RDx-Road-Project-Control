@@ -1549,6 +1549,103 @@ export const appRouter = router({
         return { success: true, photo: newPhoto };
       }),
   }),
+
+  // RATE ANALYSIS (QS Module) — SOR-based rate build-up
+  rateAnalysis: router({
+    list: protectedProcedure
+      .input(z.object({ projectId: z.number().optional() }).nullish())
+      .query(async ({ input }) => {
+        return db.getRateAnalyses(input?.projectId);
+      }),
+
+    get: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        return db.getRateAnalysisWithComponents(input.id);
+      }),
+
+    create: roleProcedure(COMMERCIAL_ROLES)
+      .input(z.object({
+        projectId: z.number(),
+        analysisNo: z.string().min(1),
+        description: z.string().optional(),
+        unit: z.string().default("Cum"),
+        sorRef: z.string().optional(),
+        leadKm: z.string().default("0.00"),
+        overheadPct: z.string().default("0.00"),
+        profitPct: z.string().default("0.00"),
+        status: z.enum(["Draft", "Approved"]).default("Draft"),
+        remarks: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return db.createRateAnalysis(input);
+      }),
+
+    update: roleProcedure(COMMERCIAL_ROLES)
+      .input(z.object({
+        id: z.number(),
+        analysisNo: z.string().optional(),
+        description: z.string().optional(),
+        unit: z.string().optional(),
+        sorRef: z.string().optional(),
+        leadKm: z.string().optional(),
+        overheadPct: z.string().optional(),
+        profitPct: z.string().optional(),
+        status: z.enum(["Draft", "Approved"]).optional(),
+        remarks: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        return db.updateRateAnalysis(id, data);
+      }),
+
+    delete: roleProcedure(COMMERCIAL_ROLES)
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        return db.deleteRateAnalysis(input.id);
+      }),
+
+    addComponent: roleProcedure(COMMERCIAL_ROLES)
+      .input(z.object({
+        analysisId: z.number(),
+        category: z.enum(["Material", "Labour", "Machinery"]),
+        description: z.string().min(1),
+        unit: z.string().default("Nos"),
+        coefficient: z.string().default("0.0000"),
+        rate: z.string().default("0.00"),
+        sortOrder: z.number().default(0),
+      }))
+      .mutation(async ({ input }) => {
+        return db.addRateAnalysisComponent(input);
+      }),
+
+    updateComponent: roleProcedure(COMMERCIAL_ROLES)
+      .input(z.object({
+        id: z.number(),
+        category: z.enum(["Material", "Labour", "Machinery"]).optional(),
+        description: z.string().optional(),
+        unit: z.string().optional(),
+        coefficient: z.string().optional(),
+        rate: z.string().optional(),
+        sortOrder: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        return db.updateRateAnalysisComponent(id, data);
+      }),
+
+    deleteComponent: roleProcedure(COMMERCIAL_ROLES)
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        return db.deleteRateAnalysisComponent(input.id);
+      }),
+
+    seedTemplates: roleProcedure(COMMERCIAL_ROLES)
+      .input(z.object({ projectId: z.number() }))
+      .mutation(async ({ input }) => {
+        return db.seedRateAnalysisTemplates(input.projectId);
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
