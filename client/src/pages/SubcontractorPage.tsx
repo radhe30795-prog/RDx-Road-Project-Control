@@ -24,6 +24,41 @@ export default function SubcontractorPage() {
   const [isWoModalOpen, setIsWoModalOpen] = useState(false);
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
 
+  // Edit / Payment / Progress modal state
+  const [editingWo, setEditingWo] = useState<any | null>(null);
+  const [payingWo, setPayingWo] = useState<any | null>(null);
+  const [progressWo, setProgressWo] = useState<any | null>(null);
+  const [editingSub, setEditingSub] = useState<any | null>(null);
+
+  // Work Order Edit form fields
+  const [editScope, setEditScope] = useState("");
+  const [editUnit, setEditUnit] = useState("");
+  const [editAwardedQty, setEditAwardedQty] = useState("");
+  const [editRate, setEditRate] = useState("");
+  const [editStartDate, setEditStartDate] = useState("");
+  const [editTargetDate, setEditTargetDate] = useState("");
+  const [editStatus, setEditStatus] = useState("");
+  const [editRemarks, setEditRemarks] = useState("");
+
+  // Payment form fields
+  const [payAmount, setPayAmount] = useState("");
+  const [payDate, setPayDate] = useState("");
+  const [payRemarks, setPayRemarks] = useState("");
+
+  // Progress form field
+  const [progExecQty, setProgExecQty] = useState("");
+
+  // Subcontractor Edit form fields
+  const [editSubName, setEditSubName] = useState("");
+  const [editSubCategory, setEditSubCategory] = useState("");
+  const [editSubContact, setEditSubContact] = useState("");
+  const [editSubPhone, setEditSubPhone] = useState("");
+  const [editSubGstin, setEditSubGstin] = useState("");
+  const [editSubAddress, setEditSubAddress] = useState("");
+  const [editSubStatus, setEditSubStatus] = useState("");
+
+  const canEdit = ["admin", "project_manager", "qs_billing_engineer"].includes(role as string);
+
   // New Subcontractor form
   const [subCode, setSubCode] = useState("");
   const [subName, setSubName] = useState("");
@@ -54,6 +89,8 @@ export default function SubcontractorPage() {
   const createSubMutation = trpc.subcontractors.create.useMutation();
   const createWoMutation = trpc.subcontractors.createWorkOrder.useMutation();
   const updateWoMutation = trpc.subcontractors.updateWorkOrder.useMutation();
+  const updateSubMutation = trpc.subcontractors.update.useMutation();
+  const deleteWoMutation = trpc.subcontractors.deleteWorkOrder.useMutation();
 
   const handleCreateSub = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,6 +138,150 @@ export default function SubcontractorPage() {
       toast.error(err.message || "Failed to issue work order");
     }
   };
+
+  // --- Work Order Edit ---
+  function openEditWo(wo: any) {
+    setEditingWo(wo);
+    setEditScope(wo.scope || "");
+    setEditUnit(wo.unit || "");
+    setEditAwardedQty(String(wo.awardedQuantity || "0"));
+    setEditRate(String(wo.rate || "0"));
+    setEditStartDate(wo.startDate || "");
+    setEditTargetDate(wo.targetDate || "");
+    setEditStatus(wo.status || "Issued");
+    setEditRemarks(wo.remarks || "");
+  }
+
+  async function handleUpdateWo(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingWo) return;
+    try {
+      await updateWoMutation.mutateAsync({
+        id: editingWo.id,
+        scope: editScope.trim(),
+        unit: editUnit.trim(),
+        awardedQuantity: editAwardedQty,
+        rate: editRate,
+        startDate: editStartDate,
+        targetDate: editTargetDate,
+        status: editStatus as any,
+        remarks: editRemarks.trim() || undefined,
+      });
+      toast.success(`Work Order ${editingWo.workOrderNo} updated!`);
+      setEditingWo(null);
+      refetchWo();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update work order");
+    }
+  }
+
+  // --- Payment (adds to existing paidAmount) ---
+  function openPayment(wo: any) {
+    setPayingWo(wo);
+    setPayAmount("");
+    setPayDate(new Date().toISOString().slice(0, 10));
+    setPayRemarks("");
+  }
+
+  async function handlePostPayment(e: React.FormEvent) {
+    e.preventDefault();
+    if (!payingWo) return;
+    const amt = parseFloat(payAmount || "0");
+    if (amt <= 0) {
+      toast.error("Enter a valid payment amount");
+      return;
+    }
+    try {
+      const currentPaid = parseFloat(String(payingWo.paidAmount || 0));
+      const newPaid = (currentPaid + amt).toFixed(2);
+      const note = `Payment ₹${amt.toLocaleString("en-IN")} on ${payDate}${payRemarks ? ": " + payRemarks : ""}`;
+      const prevRemarks = payingWo.remarks ? payingWo.remarks + "\n" : "";
+      await updateWoMutation.mutateAsync({
+        id: payingWo.id,
+        paidAmount: newPaid,
+        status: "In Progress",
+        remarks: prevRemarks + note,
+      });
+      toast.success(`₹${amt.toLocaleString("en-IN")} paid. Total paid: ₹${parseFloat(newPaid).toLocaleString("en-IN")}`);
+      setPayingWo(null);
+      refetchWo();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to post payment");
+    }
+  }
+
+  // --- Progress update ---
+  function openProgress(wo: any) {
+    setProgressWo(wo);
+    setProgExecQty(String(wo.executedQuantity || "0"));
+  }
+
+  async function handleUpdateProgress(e: React.FormEvent) {
+    e.preventDefault();
+    if (!progressWo) return;
+    try {
+      const qty = parseFloat(progExecQty || "0");
+      const awardQty = parseFloat(String(progressWo.awardedQuantity || 0));
+      let status = progressWo.status;
+      if (awardQty > 0 && qty >= awardQty) status = "Completed";
+      else if (qty > 0) status = "In Progress";
+      await updateWoMutation.mutateAsync({
+        id: progressWo.id,
+        executedQuantity: progExecQty,
+        status,
+      });
+      toast.success(`Progress updated: ${qty.toLocaleString()} ${progressWo.unit}`);
+      setProgressWo(null);
+      refetchWo();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update progress");
+    }
+  }
+
+  async function handleDeleteWo(wo: any) {
+    if (!confirm(`Delete Work Order ${wo.workOrderNo}? This cannot be undone.`)) return;
+    try {
+      await deleteWoMutation.mutateAsync({ id: wo.id });
+      toast.success("Work order deleted");
+      refetchWo();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete work order");
+    }
+  }
+
+  // --- Subcontractor Edit ---
+  function openEditSub(s: any) {
+    setEditingSub(s);
+    setEditSubName(s.name || "");
+    setEditSubCategory(s.workCategory || "");
+    setEditSubContact(s.contactPerson || "");
+    setEditSubPhone(s.phone || "");
+    setEditSubGstin(s.gstin || "");
+    setEditSubAddress(s.address || "");
+    setEditSubStatus(s.status || "Active");
+  }
+
+  async function handleUpdateSub(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingSub) return;
+    try {
+      await updateSubMutation.mutateAsync({
+        id: editingSub.id,
+        name: editSubName.trim(),
+        workCategory: editSubCategory,
+        contactPerson: editSubContact.trim() || undefined,
+        phone: editSubPhone.trim() || undefined,
+        gstin: editSubGstin.trim() || undefined,
+        address: editSubAddress.trim() || undefined,
+        status: editSubStatus as any,
+      });
+      toast.success(`Subcontractor ${editSubName} updated!`);
+      setEditingSub(null);
+      refetchSubs();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update subcontractor");
+    }
+  }
 
   // KPI summaries
   const stats = useMemo(() => {
@@ -219,6 +400,77 @@ export default function SubcontractorPage() {
         </div>
       </div>
 
+      {/* Registered Subcontractors */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+          <span className="text-xs font-bold text-slate-700">
+            Registered Subcontractors ({subsList?.length || 0})
+          </span>
+          <span className="text-[11px] text-slate-500">Click Edit to update agency details</span>
+        </div>
+        <div className="overflow-auto boq-table-scroll" style={{ maxHeight: "30vh" }}>
+          <table className="w-full min-w-[900px] text-left text-xs">
+            <thead className="sticky top-0 z-10 bg-slate-800 text-white font-semibold uppercase tracking-wider text-[10px]">
+              <tr>
+                <th className="p-3">Code</th>
+                <th className="p-3">Agency Name</th>
+                <th className="p-3">Work Category</th>
+                <th className="p-3">Contact Person</th>
+                <th className="p-3">Phone</th>
+                <th className="p-3">GSTIN</th>
+                <th className="p-3 text-center">Status</th>
+                <th className="p-3 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {!subsList?.length ? (
+                <tr>
+                  <td colSpan={8} className="p-6 text-center text-slate-400">
+                    No subcontractors registered yet.
+                  </td>
+                </tr>
+              ) : (
+                subsList.map((s) => (
+                  <tr key={s.id} className="hover:bg-slate-50 transition">
+                    <td className="p-3 font-mono font-bold text-slate-900">{s.subcontractorCode}</td>
+                    <td className="p-3 font-semibold text-slate-800">{s.name}</td>
+                    <td className="p-3 text-slate-600">{s.workCategory}</td>
+                    <td className="p-3 text-slate-600">{s.contactPerson || "—"}</td>
+                    <td className="p-3 font-mono text-slate-600">{s.phone || "—"}</td>
+                    <td className="p-3 font-mono text-slate-600">{s.gstin || "—"}</td>
+                    <td className="p-3 text-center">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          s.status === "Active"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : s.status === "On Hold"
+                            ? "bg-amber-100 text-amber-800"
+                            : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {s.status}
+                      </span>
+                    </td>
+                    <td className="p-3 text-right">
+                      {canEdit ? (
+                        <button
+                          onClick={() => openEditSub(s)}
+                          className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded font-bold text-[10px]"
+                        >
+                          ✏️ Edit
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-slate-400">View</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Work Orders Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-auto boq-table-scroll" style={{ maxHeight: "60vh" }}>
@@ -311,25 +563,39 @@ export default function SubcontractorPage() {
                           </span>
                         </td>
                         <td className="p-3 text-right whitespace-nowrap">
-                          {role === "admin" || role === "qs_billing_engineer" || role === "project_manager" ? (
-                            <button
-                              onClick={async () => {
-                                const addPay = prompt("Enter additional payment amount (₹):", "50000");
-                                if (addPay && !isNaN(parseFloat(addPay))) {
-                                  const newPaid = (paid + parseFloat(addPay)).toFixed(2);
-                                  await updateWoMutation.mutateAsync({
-                                    id: wo.id,
-                                    paidAmount: newPaid,
-                                    status: "In Progress",
-                                  });
-                                  toast.success(`Payment of ₹${addPay} recorded! Total paid: ₹${newPaid}`);
-                                  refetchWo();
-                                }
-                              }}
-                              className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-semibold text-[10px]"
-                            >
-                              Post Payment
-                            </button>
+                          {canEdit ? (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => openEditWo(wo)}
+                                title="Edit work order"
+                                className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded font-bold text-[10px]"
+                              >
+                                ✏️ Edit
+                              </button>
+                              <button
+                                onClick={() => openProgress(wo)}
+                                title="Update executed quantity"
+                                className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded font-bold text-[10px]"
+                              >
+                                📊 Progress
+                              </button>
+                              <button
+                                onClick={() => openPayment(wo)}
+                                title="Post payment"
+                                className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded font-bold text-[10px]"
+                              >
+                                💰 Payment
+                              </button>
+                              {role === "admin" && (
+                                <button
+                                  onClick={() => handleDeleteWo(wo)}
+                                  title="Delete work order"
+                                  className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded font-bold text-[10px]"
+                                >
+                                  🗑️
+                                </button>
+                              )}
+                            </div>
                           ) : (
                             <span className="text-[10px] text-slate-400">View</span>
                           )}
@@ -587,6 +853,238 @@ export default function SubcontractorPage() {
                 >
                   Issue Work Order
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit Work Order */}
+      {editingWo && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900">✏️ Edit Work Order</h2>
+              <button onClick={() => setEditingWo(null)} className="text-slate-400 hover:text-slate-600 text-sm font-bold">✕</button>
+            </div>
+            <div className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 font-mono font-bold text-slate-800">
+              {editingWo.workOrderNo}
+            </div>
+            <form onSubmit={handleUpdateWo} className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700">Scope of Work *</label>
+                <input type="text" required value={editScope} onChange={(e) => setEditScope(e.target.value)}
+                  className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50" />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700">Awarded Qty *</label>
+                  <input type="number" step="0.001" required value={editAwardedQty} onChange={(e) => setEditAwardedQty(e.target.value)}
+                    className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-mono" />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700">Unit *</label>
+                  <input type="text" required value={editUnit} onChange={(e) => setEditUnit(e.target.value)}
+                    className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-mono" />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700">Rate (₹) *</label>
+                  <input type="number" step="0.01" required value={editRate} onChange={(e) => setEditRate(e.target.value)}
+                    className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-mono" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700">Start Date</label>
+                  <input type="date" value={editStartDate} onChange={(e) => setEditStartDate(e.target.value)}
+                    className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-mono" />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700">Target Date</label>
+                  <input type="date" value={editTargetDate} onChange={(e) => setEditTargetDate(e.target.value)}
+                    className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-mono" />
+                </div>
+              </div>
+              <div>
+                <label className="font-bold text-slate-700">Status</label>
+                <select value={editStatus} onChange={(e) => setEditStatus(e.target.value)}
+                  className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-semibold">
+                  {["Draft", "Issued", "In Progress", "Completed", "Closed", "On Hold"].map((st) => (
+                    <option key={st} value={st}>{st}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="font-bold text-slate-700">Remarks</label>
+                <textarea rows={2} value={editRemarks} onChange={(e) => setEditRemarks(e.target.value)}
+                  className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50" />
+              </div>
+              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex justify-between items-center">
+                <span className="text-slate-600">Revised Contract Value:</span>
+                <span className="font-black text-slate-900 text-sm font-mono">
+                  ₹{(parseFloat(editAwardedQty || "0") * parseFloat(editRate || "0")).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button type="button" onClick={() => setEditingWo(null)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg text-slate-600 font-semibold">Cancel</button>
+                <button type="submit" disabled={updateWoMutation.isPending}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold shadow">Update</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Post Payment */}
+      {payingWo && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900">💰 Post Payment</h2>
+              <button onClick={() => setPayingWo(null)} className="text-slate-400 hover:text-slate-600 text-sm font-bold">✕</button>
+            </div>
+            <div className="text-xs bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-emerald-800">
+              <strong className="font-mono">{payingWo.workOrderNo}</strong>
+              <br />
+              Already paid: <strong className="font-mono">₹{parseFloat(String(payingWo.paidAmount || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong>
+            </div>
+            <form onSubmit={handlePostPayment} className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700">Payment Amount (₹) *</label>
+                <input type="number" step="0.01" required value={payAmount} onChange={(e) => setPayAmount(e.target.value)}
+                  placeholder="e.g. 50000"
+                  className="mt-1 w-full p-2.5 border border-emerald-200 rounded-lg bg-emerald-50 font-mono font-bold text-emerald-700" />
+              </div>
+              <div>
+                <label className="font-bold text-slate-700">Payment Date *</label>
+                <input type="date" required value={payDate} onChange={(e) => setPayDate(e.target.value)}
+                  className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-mono" />
+              </div>
+              <div>
+                <label className="font-bold text-slate-700">Remarks</label>
+                <textarea rows={2} value={payRemarks} onChange={(e) => setPayRemarks(e.target.value)}
+                  placeholder="Cheque/UTR no., deductions..."
+                  className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50" />
+              </div>
+              {parseFloat(payAmount || "0") > 0 && (
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex justify-between items-center">
+                  <span className="text-slate-600">New total paid:</span>
+                  <span className="font-black text-emerald-700 font-mono">
+                    ₹{(parseFloat(String(payingWo.paidAmount || 0)) + parseFloat(payAmount)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button type="button" onClick={() => setPayingWo(null)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg text-slate-600 font-semibold">Cancel</button>
+                <button type="submit" disabled={updateWoMutation.isPending}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow">Post Payment</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Update Progress */}
+      {progressWo && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900">📊 Update Progress</h2>
+              <button onClick={() => setProgressWo(null)} className="text-slate-400 hover:text-slate-600 text-sm font-bold">✕</button>
+            </div>
+            <div className="text-xs bg-blue-50 border border-blue-200 rounded-lg p-3 text-blue-800">
+              <strong className="font-mono">{progressWo.workOrderNo}</strong>
+              <br />
+              Awarded: <strong className="font-mono">{parseFloat(String(progressWo.awardedQuantity || 0)).toLocaleString()} {progressWo.unit}</strong>
+            </div>
+            <form onSubmit={handleUpdateProgress} className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700">Executed Quantity ({progressWo.unit}) *</label>
+                <input type="number" step="0.001" required value={progExecQty} onChange={(e) => setProgExecQty(e.target.value)}
+                  className="mt-1 w-full p-2.5 border border-blue-200 rounded-lg bg-blue-50 font-mono font-bold text-blue-700" />
+                {parseFloat(String(progressWo.awardedQuantity || 0)) > 0 && (
+                  <p className="mt-1 text-[11px] font-bold text-blue-700">
+                    {Math.min(100, Math.round((parseFloat(progExecQty || "0") / parseFloat(String(progressWo.awardedQuantity))) * 100))}% complete
+                    {parseFloat(progExecQty || "0") >= parseFloat(String(progressWo.awardedQuantity)) && " — auto-marked Completed"}
+                  </p>
+                )}
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button type="button" onClick={() => setProgressWo(null)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg text-slate-600 font-semibold">Cancel</button>
+                <button type="submit" disabled={updateWoMutation.isPending}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow">Update Progress</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit Subcontractor */}
+      {editingSub && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900">✏️ Edit Subcontractor</h2>
+              <button onClick={() => setEditingSub(null)} className="text-slate-400 hover:text-slate-600 text-sm font-bold">✕</button>
+            </div>
+            <div className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 font-mono font-bold text-slate-800">
+              {editingSub.subcontractorCode}
+            </div>
+            <form onSubmit={handleUpdateSub} className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700">Agency Name *</label>
+                <input type="text" required value={editSubName} onChange={(e) => setEditSubName(e.target.value)}
+                  className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-semibold" />
+              </div>
+              <div>
+                <label className="font-bold text-slate-700">Work Category *</label>
+                <select value={editSubCategory} onChange={(e) => setEditSubCategory(e.target.value)}
+                  className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-semibold">
+                  {["Earthwork & Embankment", "GSB & WMM Laying", "Bituminous Laying (Paver Gang)", "Culvert & Concrete Structures", "Drain, Kerb & Retaining Wall", "Road Furniture & Signage"].map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700">Contact Person</label>
+                  <input type="text" value={editSubContact} onChange={(e) => setEditSubContact(e.target.value)}
+                    className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50" />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700">Mobile Phone</label>
+                  <input type="text" value={editSubPhone} onChange={(e) => setEditSubPhone(e.target.value)}
+                    className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-mono" />
+                </div>
+              </div>
+              <div>
+                <label className="font-bold text-slate-700">GSTIN / PAN</label>
+                <input type="text" value={editSubGstin} onChange={(e) => setEditSubGstin(e.target.value)}
+                  className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-mono" />
+              </div>
+              <div>
+                <label className="font-bold text-slate-700">Address</label>
+                <textarea rows={2} value={editSubAddress} onChange={(e) => setEditSubAddress(e.target.value)}
+                  placeholder="Office/site address..."
+                  className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50" />
+              </div>
+              <div>
+                <label className="font-bold text-slate-700">Status</label>
+                <select value={editSubStatus} onChange={(e) => setEditSubStatus(e.target.value)}
+                  className="mt-1 w-full p-2.5 border border-slate-200 rounded-lg bg-slate-50 font-semibold">
+                  {["Active", "On Hold", "Closed"].map((st) => (
+                    <option key={st} value={st}>{st}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button type="button" onClick={() => setEditingSub(null)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg text-slate-600 font-semibold">Cancel</button>
+                <button type="submit" disabled={updateSubMutation.isPending}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold shadow">Update</button>
               </div>
             </form>
           </div>
