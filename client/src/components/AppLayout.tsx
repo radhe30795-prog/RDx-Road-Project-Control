@@ -43,6 +43,7 @@ import { useAuth } from "../_core/hooks/useAuth";
 import { startLogin } from "../const";
 import { MobileInstallBanner } from "./MobileInstallBanner";
 import { canAccessPage } from "@shared/roles";
+import { ProjectProvider, useActiveProject } from "./ProjectContext";
 
 // Role Context for dynamic switching and testing
 export type UserRole = "user" | "admin" | "project_manager" | "qs_billing_engineer" | "site_engineer" | "qa_qc_engineer" | "hr_payroll_manager";
@@ -71,19 +72,18 @@ const ROLE_OPTIONS: { id: UserRole; label: string; badgeColor: string; descripti
   { id: "hr_payroll_manager", label: "HR / Payroll Manager", badgeColor: "bg-cyan-100 text-cyan-800 border-cyan-300", description: "Employee master, assignments & payroll inputs" },
 ];
 
-export function AppLayout({ children }: { children: React.ReactNode }) {
+function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifDrawerOpen, setNotifDrawerOpen] = useState(false);
   const { user, isAuthenticated, logout } = useAuth();
   const role = (user?.role || "user") as UserRole;
+  const { projectId, setProjectId, projects, activeProject } = useActiveProject();
 
   const { data: notifs, refetch: refetchNotifs } = trpc.notifications.list.useQuery({ unreadOnly: true });
-  const { data: stats } = trpc.dashboard.getStats.useQuery();
-  const { data: projects } = trpc.projects.list.useQuery();
-  const headerProject = projects?.[0];
-  const headerProjectLabel = headerProject
-    ? `${headerProject.projectName} • ${headerProject.clientDepartment || ""}`.trim()
+  const { data: stats } = trpc.dashboard.getStats.useQuery({ projectId });
+  const headerProjectLabel = activeProject
+    ? `${activeProject.projectName} • ${activeProject.clientDepartment || ""}`.trim()
     : "RDx Road Project Control";
 
   const markRead = trpc.notifications.markAsRead.useMutation({
@@ -149,6 +149,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <span className="hidden sm:inline-block px-2 py-0.5 text-xs font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded">
                       14 Roads Suite
                     </span>
+                    {projects && projects.length > 0 && (
+                      <select
+                        value={projectId ?? ""}
+                        onChange={(e) => setProjectId(parseInt(e.target.value))}
+                        className="hidden sm:inline-block px-2 py-0.5 text-xs font-semibold bg-slate-800 text-amber-300 border border-slate-600 rounded cursor-pointer max-w-56 truncate"
+                        title="Switch project"
+                      >
+                        {projects.map((p: any) => (
+                          <option key={p.id} value={p.id} className="text-slate-900">
+                            {p.projectName} ({p.projectId})
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                   <p className="text-[11px] text-slate-400 hidden sm:block truncate max-w-sm">
                     {headerProjectLabel}
@@ -398,5 +412,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
     </RoleContext.Provider>
+  );
+}
+
+export function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <ProjectProvider>
+      <AppLayoutInner>{children}</AppLayoutInner>
+    </ProjectProvider>
   );
 }
