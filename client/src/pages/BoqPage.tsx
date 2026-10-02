@@ -271,11 +271,14 @@ export default function BoqPage() {
         </div>
       </div>
 
-      {/* BOQ Table */}
+      {/* BOQ Table - with vertical & horizontal scrollbars */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-900 text-white font-semibold uppercase tracking-wider text-[10px]">
+        <div
+          className="overflow-auto boq-table-scroll"
+          style={{ maxHeight: "65vh" }}
+        >
+          <table className="w-full text-left text-xs min-w-[1200px]">
+            <thead className="bg-slate-900 text-white font-semibold uppercase tracking-wider text-[10px] sticky top-0 z-10">
               <tr>
                 <th className="p-3">Item Code & Chapter</th>
                 <th className="p-3">Description</th>
