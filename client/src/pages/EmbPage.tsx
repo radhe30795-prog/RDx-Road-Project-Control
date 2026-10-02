@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { trpc } from "../lib/trpc";
+import { useActiveProject } from "../components/ProjectContext";
 import {
   Ruler,
   Plus,
@@ -46,15 +47,16 @@ export default function EmbPage() {
   const [depth, setDepth] = useState("0.150");
   const [remarks, setRemarks] = useState("Joint measurement taken with client junior engineer.");
 
-  const { data: projects } = trpc.projects.list.useQuery();
-  const activeProjectId = projects?.[0]?.id || 1;
-  const { data: roads } = trpc.roads.list.useQuery();
+  const { projectId: activeProjectId } = useActiveProject();
+  const { data: roads } = trpc.roads.list.useQuery({ projectId: activeProjectId });
   const { data: boqData } = trpc.boq.list.useQuery({
+    projectId: activeProjectId,
     roadId: selectedRoadId !== "All" ? parseInt(selectedRoadId) : undefined,
   });
-  const { data: activities } = trpc.activities.list.useQuery({ roadId });
+  const { data: activities } = trpc.activities.list.useQuery({ roadId, projectId: activeProjectId });
 
   const { data: measurements, isLoading, refetch } = trpc.measurements.list.useQuery({
+    projectId: activeProjectId,
     roadId: selectedRoadId !== "All" ? parseInt(selectedRoadId) : undefined,
     boqItemId: selectedBoqId !== "All" ? parseInt(selectedBoqId) : undefined,
   });
@@ -105,7 +107,7 @@ export default function EmbPage() {
       await createMbMutation.mutateAsync({
         mbNo: autoNo,
         mbDate,
-        projectId: activeProjectId,
+        projectId: activeProjectId as number,
         roadId,
         boqItemId,
         activityId: activityId || undefined,
