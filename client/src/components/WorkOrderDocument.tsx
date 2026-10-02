@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { trpc } from "../lib/trpc";
 import { toast } from "sonner";
+
+export type WoLang = "hi" | "en";
 
 export interface WoTermSection {
   no: number;
@@ -61,6 +63,134 @@ export const DEFAULT_WO_TERMS: WoTermSection[] = [
   },
 ];
 
+/** English translation of the work order terms (same 10 sections). */
+export const DEFAULT_WO_TERMS_EN: WoTermSection[] = [
+  {
+    no: 1,
+    title: "Special Terms & Conditions",
+    body: "The sub-contractor {{subcontractor}} is hereby appointed as sub-contractor for structure work on {{roadName}} (length {{roadLength}} km). This work order is issued by {{employer}} (main contractor). The sub-contractor must carefully read and accept all terms and conditions before commencing work.",
+  },
+  {
+    no: 2,
+    title: "Payment Terms",
+    body: "15% of the total work order value shall be retained as Security Deposit, refundable after satisfactory completion of work and expiry of the defect liability period. Running bills shall be submitted every 15 days and payment shall be made on the basis of measurements recorded in the Measurement Book. GST shall be payable extra on all rates.",
+  },
+  { no: 3, title: "Bill of Quantities (BOQ)", body: "__BOQ_TABLE__" },
+  {
+    no: 4,
+    title: "Material & Security",
+    body: "The sub-contractor shall be fully responsible for all materials supplied by the main contractor. The sub-contractor shall make proper security arrangements for storage, upkeep and prevention of wastage of materials. Any loss/theft of material shall be recovered from the sub-contractor.",
+  },
+  {
+    no: 5,
+    title: "Quality",
+    body: "All work shall conform to approved drawings, specifications and MORTH standards. The sub-contractor shall provide samples/cubes for quality testing at his own cost. Rejected work shall be redone by the sub-contractor at his own cost.",
+  },
+  {
+    no: 6,
+    title: "General Rules",
+    body: "The sub-contractor shall maintain adequate skilled labour, tools and equipment at site. Maintaining progress as per target dates shall be the sub-contractor's responsibility. Compliance with the instructions of the main contractor's engineer is mandatory.",
+  },
+  {
+    no: 7,
+    title: "Safety Requirements",
+    body: "The sub-contractor shall take all necessary safety measures for workers at site (helmets, safety belts, barricading, sign boards etc.) at his own cost. The sub-contractor shall bear full responsibility for any accident.",
+  },
+  {
+    no: 8,
+    title: "Termination",
+    body: "In case of violation of terms and conditions, the main contractor reserves the right to terminate this work order with immediate effect. In such case, payment for work done shall be made on measurement basis, and any extra cost incurred in getting the remaining work executed through another agency shall be recovered from the sub-contractor.",
+  },
+  {
+    no: 9,
+    title: "Unforeseen Circumstances",
+    body: "In case of work disruption due to floods, earthquake, pandemic or other unforeseen circumstances (Force Majeure), both parties shall consider time extension by mutual agreement. Written intimation of such circumstances within 7 days is mandatory.",
+  },
+  {
+    no: 10,
+    title: "Jurisdiction",
+    body: "Any dispute arising out of this work order shall be settled through mutual discussion. If the dispute remains unresolved, the courts at Ambikapur (Chhattisgarh) shall have jurisdiction.",
+  },
+];
+
+export const WO_TERMS: Record<WoLang, WoTermSection[]> = {
+  hi: DEFAULT_WO_TERMS,
+  en: DEFAULT_WO_TERMS_EN,
+};
+
+/** Document chrome labels per language. */
+export const DOC_STRINGS: Record<
+  WoLang,
+  {
+    title: string;
+    titleSub: string;
+    ref: string;
+    date: string;
+    to: string;
+    subject: string;
+    mob: string;
+    sn: string;
+    workType: string;
+    unit: string;
+    rate: string;
+    noItems: string;
+    subContractor: string;
+    mainContractor: string;
+    signature: string;
+    name: string;
+    seal: string;
+  }
+> = {
+  hi: {
+    title: "कायादेश",
+    titleSub: "(Work Order)",
+    ref: "संदर्भ",
+    date: "दिनांक",
+    to: "प्रति",
+    subject: "विषय",
+    mob: "मो.",
+    sn: "क्र.सं.",
+    workType: "कार्य का प्रकार",
+    unit: "इकाई",
+    rate: "दर (₹)",
+    noItems: 'कोई आइटम नहीं — "BOQ Items" टैब से जोड़ें',
+    subContractor: "उप-ठेकेदार",
+    mainContractor: "मुख्य ठेकेदार",
+    signature: "हस्ताक्षर",
+    name: "नाम",
+    seal: "(मुहर)",
+  },
+  en: {
+    title: "Work Order",
+    titleSub: "(कायादेश)",
+    ref: "Ref",
+    date: "Date",
+    to: "To",
+    subject: "Subject",
+    mob: "Mob.",
+    sn: "S.No.",
+    workType: "Description of Work",
+    unit: "Unit",
+    rate: "Rate (₹)",
+    noItems: 'No items — add from the "BOQ Items" tab',
+    subContractor: "Sub-Contractor",
+    mainContractor: "Main Contractor",
+    signature: "Signature",
+    name: "Name",
+    seal: "(Seal)",
+  },
+};
+
+export const WO_INTRO: Record<WoLang, string> = {
+  hi: "संदर्भित कार्य हेतु {{subcontractor}} को उप-ठेकेदार के रूप में नियुक्त किया जाता है। {{employer}}, रायगढ़ (मुख्य ठेकेदार) द्वारा {{roadName}} मार्ग (लंबाई {{roadLength}} कि.मी.) पर संरचना कार्य कराए जाने हेतु यह कार्यादेश निम्नलिखित नियमों एवं शर्तों के अधीन जारी किया जाता है।",
+  en: "{{subcontractor}} is hereby appointed as sub-contractor for the referenced work. This work order is issued by {{employer}}, Raigarh (main contractor) for getting structure work executed on {{roadName}} road (length {{roadLength}} km), subject to the following terms and conditions.",
+};
+
+export const WO_SUBJECT: Record<WoLang, string> = {
+  hi: "{{roadName}} (लंबाई {{roadLength}} कि.मी.) पर संरचना कार्य हेतु कार्यादेश।",
+  en: "Work order for structure work on {{roadName}} (length {{roadLength}} km).",
+};
+
 function fillPlaceholders(text: string, vars: Record<string, string>) {
   let out = text;
   for (const [k, v] of Object.entries(vars)) {
@@ -80,6 +210,7 @@ function formatDate(d: string | Date | null | undefined) {
 
 export default function WorkOrderDocument({ workOrderId, onClose }: { workOrderId: number; onClose?: () => void }) {
   const [tab, setTab] = useState<"doc" | "items" | "terms">("doc");
+  const [lang, setLang] = useState<WoLang>("hi");
   const [editTerms, setEditTerms] = useState<WoTermSection[] | null>(null);
   const [newItem, setNewItem] = useState({ description: "", unit: "Nos", rate: "" });
   const [editingItem, setEditingItem] = useState<any | null>(null);
@@ -89,6 +220,34 @@ export default function WorkOrderDocument({ workOrderId, onClose }: { workOrderI
   const addItem = trpc.subcontractors.addWorkOrderItem.useMutation();
   const updItem = trpc.subcontractors.updateWorkOrderItem.useMutation();
   const delItem = trpc.subcontractors.deleteWorkOrderItem.useMutation();
+
+  // Sync language from persisted per-WO preference
+  useEffect(() => {
+    const dl = (data as any)?.wo?.docLang;
+    if (dl === "hi" || dl === "en") setLang(dl);
+  }, [data]);
+
+  const switchLang = async (l: WoLang) => {
+    setLang(l);
+    try {
+      await updateWo.mutateAsync({ id: workOrderId, docLang: l });
+    } catch {
+      /* persistence is best-effort; view toggle still works */
+    }
+  };
+
+  /** Parse termsOverride: lang-keyed object {hi:[...],en:[...]} or legacy plain array (treated as Hindi). */
+  const parseOverride = (raw: string | null | undefined): Partial<Record<WoLang, WoTermSection[]>> => {
+    if (!raw) return {};
+    try {
+      const p = JSON.parse(raw);
+      if (Array.isArray(p)) return { hi: p };
+      if (p && typeof p === "object") return p;
+    } catch {
+      /* fall through */
+    }
+    return {};
+  };
 
   if (isLoading) return <div className="p-8 text-center text-sm text-slate-500">कार्यादेश लोड हो रहा है…</div>;
   if (!data) return <div className="p-8 text-center text-sm text-red-500">कार्यादेश नहीं मिला।</div>;
@@ -104,41 +263,43 @@ export default function WorkOrderDocument({ workOrderId, onClose }: { workOrderI
     scope: wo.scope || "—",
   };
 
-  // Resolve sections: per-WO override (JSON) else template with placeholders filled
+  // Resolve sections for current language: per-WO override (lang-keyed) else template with placeholders filled
+  const override = parseOverride(wo.termsOverride);
   let sections: WoTermSection[];
-  if (wo.termsOverride) {
-    try {
-      sections = JSON.parse(wo.termsOverride);
-    } catch {
-      sections = DEFAULT_WO_TERMS.map((s) => ({ ...s, body: fillPlaceholders(s.body, vars) }));
-    }
+  if (override[lang]) {
+    sections = override[lang]!;
   } else {
-    sections = DEFAULT_WO_TERMS.map((s) => ({ ...s, body: fillPlaceholders(s.body, vars) }));
+    sections = WO_TERMS[lang].map((s) => ({ ...s, body: fillPlaceholders(s.body, vars) }));
   }
   const shownSections = editTerms || sections;
+  const T = DOC_STRINGS[lang];
 
-  const intro = `संदर्भित कार्य हेतु ${vars.subcontractor} को उप-ठेकेदार के रूप में नियुक्त किया जाता है। ${vars.employer}, रायगढ़ (मुख्य ठेकेदार) द्वारा ${vars.roadName} मार्ग (लंबाई ${vars.roadLength} कि.मी.) पर संरचना कार्य कराए जाने हेतु यह कार्यादेश निम्नलिखित नियमों एवं शर्तों के अधीन जारी किया जाता है।`;
+  const intro = fillPlaceholders(WO_INTRO[lang], vars);
+  const subject = fillPlaceholders(WO_SUBJECT[lang], vars);
 
   const startTermsEdit = () => {
-    // Fill placeholders into editable copy so user edits final text
+    // Fill placeholders into editable copy so user edits final text (current language only)
     setEditTerms(sections.map((s) => ({ ...s })));
     setTab("terms");
   };
   const saveTerms = async () => {
     if (!editTerms) return;
-    await updateWo.mutateAsync({ id: wo.id, termsOverride: JSON.stringify(editTerms) });
-    toast.success("शर्तें सहेजी गईं!");
+    const merged = { ...override, [lang]: editTerms };
+    await updateWo.mutateAsync({ id: wo.id, termsOverride: JSON.stringify(merged) });
+    toast.success(lang === "hi" ? "शर्तें सहेजी गईं!" : "Terms saved!");
     setEditTerms(null);
     setTab("doc");
     refetch();
   };
   const resetTerms = async () => {
-    if (!confirm("डिफ़ॉल्ट शर्तों पर वापस जाएं?")) return;
-    await updateWo.mutateAsync({ id: wo.id, termsOverride: null });
+    if (!confirm(lang === "hi" ? "डिफ़ॉल्ट शर्तों पर वापस जाएं?" : "Reset to default terms?")) return;
+    const merged = { ...override };
+    delete merged[lang];
+    await updateWo.mutateAsync({ id: wo.id, termsOverride: Object.keys(merged).length ? JSON.stringify(merged) : null });
     setEditTerms(null);
     setTab("doc");
     refetch();
-    toast.success("डिफ़ॉल्ट शर्तें लागू!");
+    toast.success(lang === "hi" ? "डिफ़ॉल्ट शर्तें लागू!" : "Default terms restored!");
   };
 
   const handleAddItem = async (e: React.FormEvent) => {
@@ -182,17 +343,17 @@ export default function WorkOrderDocument({ workOrderId, onClose }: { workOrderI
     <table className="w-full border-collapse border border-slate-800 text-[13px] my-2">
       <thead>
         <tr className="bg-slate-100">
-          <th className="border border-slate-800 px-2 py-1.5 w-14">क्र.सं.</th>
-          <th className="border border-slate-800 px-2 py-1.5 text-left">कार्य का प्रकार</th>
-          <th className="border border-slate-800 px-2 py-1.5 w-24">इकाई</th>
-          <th className="border border-slate-800 px-2 py-1.5 w-32">दर (₹)</th>
+          <th className="border border-slate-800 px-2 py-1.5 w-14">{T.sn}</th>
+          <th className="border border-slate-800 px-2 py-1.5 text-left">{T.workType}</th>
+          <th className="border border-slate-800 px-2 py-1.5 w-24">{T.unit}</th>
+          <th className="border border-slate-800 px-2 py-1.5 w-32">{T.rate}</th>
         </tr>
       </thead>
       <tbody>
         {items.length === 0 ? (
           <tr>
             <td colSpan={4} className="border border-slate-800 px-2 py-3 text-center text-slate-500">
-              कोई आइटम नहीं — "BOQ Items" टैब से जोड़ें
+              {T.noItems}
             </td>
           </tr>
         ) : (
@@ -224,12 +385,16 @@ export default function WorkOrderDocument({ workOrderId, onClose }: { workOrderI
 
       {/* Toolbar */}
       <div className="no-print flex flex-wrap items-center gap-2 p-3 border-b border-slate-200 bg-slate-50">
-        <button onClick={() => setTab("doc")} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${tab === "doc" ? "bg-slate-900 text-white" : "bg-white border border-slate-200 text-slate-700"}`}>📄 दस्तावेज़</button>
+        <div className="flex rounded-lg overflow-hidden border border-slate-300 text-xs font-bold">
+          <button onClick={() => switchLang("hi")} className={`px-3 py-1.5 ${lang === "hi" ? "bg-orange-500 text-white" : "bg-white text-slate-600"}`}>हिंदी</button>
+          <button onClick={() => switchLang("en")} className={`px-3 py-1.5 ${lang === "en" ? "bg-orange-500 text-white" : "bg-white text-slate-600"}`}>English</button>
+        </div>
+        <button onClick={() => setTab("doc")} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${tab === "doc" ? "bg-slate-900 text-white" : "bg-white border border-slate-200 text-slate-700"}`}>📄 {lang === "hi" ? "दस्तावेज़" : "Document"}</button>
         <button onClick={() => setTab("items")} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${tab === "items" ? "bg-slate-900 text-white" : "bg-white border border-slate-200 text-slate-700"}`}>📋 BOQ Items ({items.length})</button>
-        <button onClick={startTermsEdit} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${tab === "terms" ? "bg-slate-900 text-white" : "bg-white border border-slate-200 text-slate-700"}`}>✏️ शर्तें बदलें</button>
+        <button onClick={startTermsEdit} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${tab === "terms" ? "bg-slate-900 text-white" : "bg-white border border-slate-200 text-slate-700"}`}>✏️ {lang === "hi" ? "शर्तें बदलें" : "Edit Terms"}</button>
         <div className="flex-1" />
-        <button onClick={() => window.print()} className="px-4 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white">🖨️ प्रिंट</button>
-        {onClose && <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-700">✕ बंद</button>}
+        <button onClick={() => window.print()} className="px-4 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white">🖨️ {lang === "hi" ? "प्रिंट" : "Print"}</button>
+        {onClose && <button onClick={onClose} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-700">✕ {lang === "hi" ? "बंद" : "Close"}</button>}
       </div>
 
       {tab === "items" && (
@@ -271,7 +436,7 @@ export default function WorkOrderDocument({ workOrderId, onClose }: { workOrderI
 
       {tab === "terms" && editTerms && (
         <div className="no-print p-4 overflow-y-auto space-y-3">
-          <p className="text-xs text-slate-500">प्रत्येक धारा का शीर्षक व विवरण बदल सकते हैं। सहेजने पर यह कार्यादेश हेतु स्थायी रहेगा।</p>
+          <p className="text-xs text-slate-500">{lang === "hi" ? "प्रत्येक धारा का शीर्षक व विवरण बदल सकते हैं। सहेजने पर यह कार्यादेश हेतु स्थायी रहेगा।" : "You can edit each section's title and body. Saving makes it permanent for this work order."} ({lang === "hi" ? "हिंदी" : "English"})</p>
           {editTerms.map((s, i) => (
             <div key={s.no} className="bg-white border border-slate-200 rounded-xl p-3 space-y-2">
               <div className="flex items-center gap-2">
@@ -286,35 +451,35 @@ export default function WorkOrderDocument({ workOrderId, onClose }: { workOrderI
             </div>
           ))}
           <div className="flex justify-end gap-2 pt-2">
-            <button onClick={resetTerms} className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-600">↩ डिफ़ॉल्ट पर वापस</button>
-            <button onClick={() => { setEditTerms(null); setTab("doc"); }} className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-600">रद्द करें</button>
-            <button onClick={saveTerms} disabled={updateWo.isPending} className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold">✓ सहेजें</button>
+            <button onClick={resetTerms} className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-600">↩ {lang === "hi" ? "डिफ़ॉल्ट पर वापस" : "Reset to default"}</button>
+            <button onClick={() => { setEditTerms(null); setTab("doc"); }} className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-600">{lang === "hi" ? "रद्द करें" : "Cancel"}</button>
+            <button onClick={saveTerms} disabled={updateWo.isPending} className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold">✓ {lang === "hi" ? "सहेजें" : "Save"}</button>
           </div>
         </div>
       )}
 
       {tab === "doc" && (
-        <div className="wo-doc-print overflow-y-auto p-6 bg-white text-slate-900" lang="hi" style={{ maxHeight: "70vh" }}>
+        <div className="wo-doc-print overflow-y-auto p-6 bg-white text-slate-900" lang={lang} style={{ maxHeight: "70vh" }}>
           {/* Header */}
           <div className="text-center border-b-2 border-slate-900 pb-3 mb-4">
-            <h1 className="text-2xl font-bold">कायादेश <span className="text-base font-normal">(Work Order)</span></h1>
+            <h1 className="text-2xl font-bold">{T.title} <span className="text-base font-normal">{T.titleSub}</span></h1>
             <div className="flex justify-between text-[13px] mt-2">
-              <span><strong>संदर्भ:</strong> {vars.woNo}</span>
-              <span><strong>दिनांक:</strong> {vars.woDate}</span>
+              <span><strong>{T.ref}:</strong> {vars.woNo}</span>
+              <span><strong>{T.date}:</strong> {vars.woDate}</span>
             </div>
           </div>
 
-          {/* प्रति */}
+          {/* प्रति / To */}
           <div className="mb-3 text-[13px]">
-            <p className="font-bold">प्रति,</p>
+            <p className="font-bold">{T.to},</p>
             <p className="font-bold ml-4">{vars.subcontractor}</p>
             {subcontractor?.address && <p className="ml-4">{subcontractor.address}</p>}
-            {subcontractor?.phone && <p className="ml-4">मो.: {subcontractor.phone}</p>}
+            {subcontractor?.phone && <p className="ml-4">{T.mob}: {subcontractor.phone}</p>}
           </div>
 
-          {/* विषय */}
+          {/* विषय / Subject */}
           <div className="mb-3 text-[13px]">
-            <p><strong>विषय:</strong> {vars.roadName} (लंबाई {vars.roadLength} कि.मी.) पर संरचना कार्य हेतु कार्यादेश।</p>
+            <p><strong>{T.subject}:</strong> {subject}</p>
           </div>
 
           {/* Intro */}
@@ -331,17 +496,17 @@ export default function WorkOrderDocument({ workOrderId, onClose }: { workOrderI
           {/* Signatures */}
           <div className="grid grid-cols-2 gap-8 mt-10 text-[13px]">
             <div className="text-center">
-              <p className="font-bold mb-8">उप-ठेकेदार</p>
-              <p>हस्ताक्षर: _______________</p>
-              <p className="mt-1">नाम: {vars.subcontractor}</p>
-              <p className="mt-1">दिनांक: _______________</p>
+              <p className="font-bold mb-8">{T.subContractor}</p>
+              <p>{T.signature}: _______________</p>
+              <p className="mt-1">{T.name}: {vars.subcontractor}</p>
+              <p className="mt-1">{T.date}: _______________</p>
             </div>
             <div className="text-center">
-              <p className="font-bold mb-8">मुख्य ठेकेदार</p>
-              <p>हस्ताक्षर: _______________</p>
-              <p className="mt-1">नाम: {vars.employer}</p>
-              <p className="mt-1">दिनांक: _______________</p>
-              <p className="mt-1">(मुहर)</p>
+              <p className="font-bold mb-8">{T.mainContractor}</p>
+              <p>{T.signature}: _______________</p>
+              <p className="mt-1">{T.name}: {vars.employer}</p>
+              <p className="mt-1">{T.date}: _______________</p>
+              <p className="mt-1">{T.seal}</p>
             </div>
           </div>
         </div>
