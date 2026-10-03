@@ -30,6 +30,14 @@ ENV VITE_FIREBASE_API_KEY=$VITE_FIREBASE_API_KEY \
     VITE_FIREBASE_PROJECT_ID=$VITE_FIREBASE_PROJECT_ID \
     VITE_FIREBASE_STORAGE_BUCKET=$VITE_FIREBASE_STORAGE_BUCKET
 
+# PWA icons (icon-192.png / icon-512.png / apple-touch-icon.png) are binary
+# PNGs and cannot be pushed through the GitHub MCP file API (text-only),
+# so they are rendered at build time from the committed Python script.
+# Vite copies client/public/* into dist/public during the build below.
+RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pil \
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 scripts/generate_pwa_icons.py
+
 RUN pnpm build
 
 # Bundle the one-shot DB migration runner (dist/migrate.js)
