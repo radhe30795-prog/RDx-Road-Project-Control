@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { trpc } from "../lib/trpc";
 import { useActiveProject } from "../components/ProjectContext";
 import {
@@ -49,6 +49,13 @@ export default function EmbPage() {
 
   const { projectId: activeProjectId } = useActiveProject();
   const { data: roads } = trpc.roads.list.useQuery({ projectId: activeProjectId });
+
+  // Default the entry-form road to the first available road (instead of hardcoded 1)
+  useEffect(() => {
+    if (roads && roads.length > 0 && !roads.some((r: any) => r.id === roadId)) {
+      setRoadId((roads[0] as any).id);
+    }
+  }, [roads]);
   const { data: boqData } = trpc.boq.list.useQuery({
     projectId: activeProjectId,
     roadId: selectedRoadId !== "All" ? parseInt(selectedRoadId) : undefined,
@@ -102,12 +109,16 @@ export default function EmbPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!activeProjectId) {
+      toast.error("No active project selected — please select a project first, then retry.");
+      return;
+    }
     const autoNo = mbNo.trim() || `MB-2026-${Date.now().toString().slice(-6)}`;
     try {
       await createMbMutation.mutateAsync({
         mbNo: autoNo,
         mbDate,
-        projectId: activeProjectId as number,
+        projectId: activeProjectId,
         roadId,
         boqItemId,
         activityId: activityId || undefined,
@@ -217,10 +228,16 @@ export default function EmbPage() {
         {isBillingOrAdmin && (
           <button
             onClick={() => {
+              if (!activeProjectId) {
+                toast.error("No active project selected — please select a project first.");
+                return;
+              }
               setMbNo(`MB-2026-${String((measurements?.length || 0) + 1).padStart(3, "0")}`);
               setIsAddOpen(true);
             }}
-            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow"
+            disabled={!activeProjectId}
+            title={!activeProjectId ? "Select an active project first" : "Record a new e-MB measurement entry"}
+            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 disabled:cursor-not-allowed text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow"
           >
             <Plus className="w-4 h-4" />
             <span>Record e-MB Entry</span>
