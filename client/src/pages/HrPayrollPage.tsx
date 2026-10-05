@@ -165,7 +165,7 @@ export default function HrPayrollPage() {
   const [designationName, setDesignationName] = useState("");
   const [designationGrade, setDesignationGrade] = useState("");
 
-  const employeeInput = useMemo(() => ({ search: search || undefined, status: statusFilter === "all" ? undefined : statusFilter, projectId: activeProjectId }), [search, statusFilter, activeProjectId]);
+  const employeeInput = useMemo(() => ({ search: search || undefined, status: statusFilter === "all" ? undefined : statusFilter }), [search, statusFilter]);
   const { data: summary } = trpc.hr.summary.useQuery(undefined, { enabled: canUseHr });
   const { data: employees, isLoading: employeesLoading } = trpc.hr.employees.useQuery(employeeInput, { enabled: canUseHr });
   const { data: departments } = trpc.hr.departments.useQuery(undefined, { enabled: canUseHr });
@@ -596,6 +596,7 @@ export default function HrPayrollPage() {
                                   markAttendance.mutate({
                                     employeeId: employee.id,
                                     attendanceDate,
+                                    projectId: activeProjectId,
                                     status: st,
                                     overtimeHours: currentOt,
                                   })
@@ -632,6 +633,7 @@ export default function HrPayrollPage() {
                                 markAttendance.mutate({
                                   employeeId: employee.id,
                                   attendanceDate,
+                                  projectId: activeProjectId,
                                   status: currentStatus,
                                   overtimeHours: quickOvertimeHours[employee.id],
                                 });
