@@ -193,17 +193,34 @@ export default function DailyProgressPage() {
   const [matWastageQty, setMatWastageQty] = useState("");
   const [matStorageLocation, setMatStorageLocation] = useState("");
   const [matIssuedFor, setMatIssuedFor] = useState("");
-  // Machine Section — equipment deployment log
-  const [machineAssetId, setMachineAssetId] = useState<number | undefined>(undefined);
-  const [machineWorkingHours, setMachineWorkingHours] = useState("");
-  const [machineIdleHours, setMachineIdleHours] = useState("");
-  const [machineIdleReason, setMachineIdleReason] = useState("");
-  const [hourMeterOpening, setHourMeterOpening] = useState("");
-  const [hourMeterClosing, setHourMeterClosing] = useState("");
-  const [fuelConsumed, setFuelConsumed] = useState("");
-  const [machineStatus, setMachineStatus] = useState<"Working" | "Breakdown" | "Maintenance" | "Idle">("Working");
-  const [machineOperator, setMachineOperator] = useState("");
-  const [machineLocation, setMachineLocation] = useState("");
+  // Machine Section — equipment deployment log (MULTI-MACHINE: one row per machine)
+  interface MachineRow {
+    key: string;
+    assetId?: number;
+    workingHours: string;
+    idleHours: string;
+    idleReason: string;
+    hourMeterOpening: string;
+    hourMeterClosing: string;
+    fuelConsumed: string;
+    status: "Working" | "Breakdown" | "Maintenance" | "Idle";
+    operator: string;
+    location: string;
+  }
+  const newMachineRow = (): MachineRow => ({
+    key: `m_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    assetId: undefined,
+    workingHours: "",
+    idleHours: "",
+    idleReason: "",
+    hourMeterOpening: "",
+    hourMeterClosing: "",
+    fuelConsumed: "",
+    status: "Working",
+    operator: "",
+    location: "",
+  });
+  const [machineRows, setMachineRows] = useState<MachineRow[]>([newMachineRow()]);
   const [manpower, setManpower] = useState("");
   const [machinery, setMachinery] = useState("");
   const [weather, setWeather] = useState("Clear / Sunny");
@@ -274,13 +291,31 @@ export default function DailyProgressPage() {
   const matConsumed = parseFloat(materialConsumedQuantity) || 0;
   const matWastage = parseFloat(matWastageQty) || 0;
   const matClosingBalance = matOpeningBalance + matReceived - matConsumed - matWastage;
-  const selectedAsset = machineryAssets.find((a) => a.id === machineAssetId);
+
+  const updateMachineRow = (key: string, patch: Partial<MachineRow>) => {
+    setMachineRows((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  };
+  const addMachineRow = () => setMachineRows((rows) => [...rows, newMachineRow()]);
+  const removeMachineRow = (key: string) => {
+    setMachineRows((rows) => (rows.length > 1 ? rows.filter((r) => r.key !== key) : rows));
+  };
+  const handleMachineRowAssetChange = (key: string, assetId: number | undefined) => {
+    const asset = machineryAssets.find((a) => a.id === assetId);
+    updateMachineRow(key, {
+      assetId,
+      hourMeterOpening: asset ? String(asset.currentHourMeter || asset.openingHourMeter || "0") : "",
+      operator: asset?.operator || "",
+    });
+  };
+  const validMachineRows = machineRows.filter(
+    (r) => r.assetId !== undefined && r.workingHours.trim() !== ""
+  );
 
   const canSubmitDpr =
     isMaterialSection
       ? materialId !== undefined && (matReceivedQty.trim() !== "" || materialConsumedQuantity.trim() !== "")
       : isMachineSection
-        ? machineAssetId !== undefined && machineWorkingHours.trim() !== ""
+        ? validMachineRows.length > 0
         : actualQuantity.trim() !== "" && percentageComplete.trim() !== "";
 
   const handleSectionTabChange = (tabId: typeof activeSectionTab) => {
@@ -292,15 +327,6 @@ export default function DailyProgressPage() {
     } else if (activityId === 0) {
       const firstAct = availableActivities[0]?.activity?.id;
       if (firstAct) setActivityId(firstAct);
-    }
-  };
-
-  const handleMachineAssetChange = (assetId: number | undefined) => {
-    setMachineAssetId(assetId);
-    const asset = machineryAssets.find((a) => a.id === assetId);
-    if (asset) {
-      setHourMeterOpening(String(asset.currentHourMeter || asset.openingHourMeter || "0"));
-      if (asset.operator) setMachineOperator(asset.operator);
     }
   };
 
@@ -324,16 +350,7 @@ export default function DailyProgressPage() {
     setMatWastageQty("");
     setMatStorageLocation("");
     setMatIssuedFor("");
-    setMachineAssetId(undefined);
-    setMachineWorkingHours("");
-    setMachineIdleHours("");
-    setMachineIdleReason("");
-    setHourMeterOpening("");
-    setHourMeterClosing("");
-    setFuelConsumed("");
-    setMachineStatus("Working");
-    setMachineOperator("");
-    setMachineLocation("");
+    setMachineRows([newMachineRow()]);
     setManpower("");
     setMachinery("");
     setWeather("Clear / Sunny");
@@ -478,8 +495,7 @@ export default function DailyProgressPage() {
     const roadName = selectedRoad?.roadName || `Road #${roadId}`;
     const activityName = selectedAct?.activityName || `Activity #${activityId}`;
 
-    const payload = {
-      clientDraftId: `dpr_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+    const basePayload = {
       date,
       projectId: activeProjectId as number,
       roadId,
@@ -505,17 +521,6 @@ export default function DailyProgressPage() {
       materialSupplier: isMaterialSection ? (matSupplier.trim() || undefined) : undefined,
       materialWastageQuantity: isMaterialSection && matWastageQty ? matWastageQty : undefined,
       materialStorageLocation: isMaterialSection ? (matStorageLocation.trim() || undefined) : undefined,
-      // Machine section: equipment deployment log
-      machineryAssetId: isMachineSection ? (machineAssetId || undefined) : undefined,
-      machineWorkingHours: isMachineSection ? (machineWorkingHours || undefined) : undefined,
-      machineIdleHours: isMachineSection ? (machineIdleHours || undefined) : undefined,
-      machineIdleReason: isMachineSection ? (machineIdleReason.trim() || undefined) : undefined,
-      hourMeterOpening: isMachineSection ? (hourMeterOpening || undefined) : undefined,
-      hourMeterClosing: isMachineSection ? (hourMeterClosing || undefined) : undefined,
-      fuelConsumed: isMachineSection ? (fuelConsumed || undefined) : undefined,
-      machineStatus: isMachineSection ? machineStatus : undefined,
-      machineOperator: isMachineSection ? (machineOperator.trim() || undefined) : undefined,
-      machineLocation: isMachineSection ? (machineLocation.trim() || undefined) : undefined,
       manpower,
       machinery: isWorkSection ? machinery : undefined,
       weather,
@@ -525,41 +530,75 @@ export default function DailyProgressPage() {
         : remarks,
     };
 
+    // Machine section: ONE daily_progress row per machine (same date/road/project)
+    const payloads = isMachineSection
+      ? validMachineRows.map((row) => ({
+          ...basePayload,
+          clientDraftId: `dpr_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+          machineryAssetId: row.assetId,
+          machineWorkingHours: row.workingHours || undefined,
+          machineIdleHours: row.idleHours || undefined,
+          machineIdleReason: row.idleReason.trim() || undefined,
+          hourMeterOpening: row.hourMeterOpening || undefined,
+          hourMeterClosing: row.hourMeterClosing || undefined,
+          fuelConsumed: row.fuelConsumed || undefined,
+          machineStatus: row.status,
+          machineOperator: row.operator.trim() || undefined,
+          machineLocation: row.location.trim() || undefined,
+        }))
+      : [
+          {
+            ...basePayload,
+            clientDraftId: `dpr_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+          },
+        ];
+
     if (!isOnline) {
-      enqueueOfflineDprDraft({
-        roadName: selectedRoad?.roadName || `Road #${roadId}`,
-        activityName: selectedAct?.activityName || `Activity #${activityId}`,
-        payload,
-        photoAttachments: dprPhotos,
-      });
+      payloads.forEach((payload) =>
+        enqueueOfflineDprDraft({
+          roadName: selectedRoad?.roadName || `Road #${roadId}`,
+          activityName: selectedAct?.activityName || `Activity #${activityId}`,
+          payload,
+          photoAttachments: dprPhotos,
+        })
+      );
       reloadOfflineQueue();
       setIsAddOpen(false);
       setDprPhotos([]);
-      toast.success("Saved offline on this device", {
+      toast.success(`Saved offline on this device${isMachineSection ? ` (${payloads.length} machine entries)` : ""}`, {
         description: "DPR is stored locally and will sync when internet returns.",
       });
       return;
     }
 
-    archiveDprDraft({ roadName, activityName, payload, syncStatus: "pending" });
+    payloads.forEach((payload) => archiveDprDraft({ roadName, activityName, payload, syncStatus: "pending" }));
     try {
-      await createDprMutation.mutateAsync(payload);
-      if (dprPhotos.length) {
-        await uploadDprPhotos(payload.clientDraftId, payload.sectionType, dprPhotos);
+      for (const payload of payloads) {
+        await createDprMutation.mutateAsync(payload);
+        markArchivedDprSynced(payload.clientDraftId);
       }
-      markArchivedDprSynced(payload.clientDraftId);
+      if (dprPhotos.length && payloads.length > 0) {
+        // Photos attach to the first machine entry (shared site photos for the day)
+        await uploadDprPhotos(payloads[0].clientDraftId, payloads[0].sectionType, dprPhotos);
+      }
       refetch();
       reloadOfflineQueue();
       setIsAddOpen(false);
       setDprPhotos([]);
-      toast.success("DPR logged and synced to server!");
+      toast.success(
+        isMachineSection && payloads.length > 1
+          ? `${payloads.length} machine entries logged and synced!`
+          : "DPR logged and synced to server!"
+      );
     } catch (error) {
-      enqueueOfflineDprDraft({
-        roadName,
-        activityName,
-        payload,
-        photoAttachments: dprPhotos,
-      });
+      payloads.forEach((payload) =>
+        enqueueOfflineDprDraft({
+          roadName,
+          activityName,
+          payload,
+          photoAttachments: dprPhotos,
+        })
+      );
       reloadOfflineQueue();
       setIsAddOpen(false);
       setDprPhotos([]);
@@ -1556,144 +1595,181 @@ export default function DailyProgressPage() {
               {/* ============ MACHINE SECTION: Equipment Deployment Log ============ */}
               {isMachineSection && (
                 <div className="p-3 bg-amber-50/70 rounded-lg border border-amber-200 space-y-3">
-                  <span className="text-[11px] font-bold text-amber-950 uppercase tracking-wider block">
-                    Equipment Deployment Log — Hours, Fuel & Status
-                  </span>
-
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Machine / Equipment *</label>
-                    <select
-                      value={machineAssetId || ""}
-                      onChange={(e) => handleMachineAssetChange(e.target.value ? parseInt(e.target.value) : undefined)}
-                      className="w-full p-2 border rounded text-xs bg-white font-semibold"
-                    >
-                      <option value="">Select machine...</option>
-                      {machineryAssets.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.assetNo} - {a.assetType}{a.makeModel ? ` (${a.makeModel})` : ""} — {a.status}
-                        </option>
-                      ))}
-                    </select>
-                    {machineryAssets.length === 0 && (
-                      <p className="text-[10px] text-amber-800 mt-1">No machinery registered yet — add machines in the Machinery master first.</p>
-                    )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-amber-950 uppercase tracking-wider">
+                      Equipment Deployment Log — Hours, Fuel & Status
+                    </span>
+                    <span className="text-[10px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full">
+                      {validMachineRows.length} machine{validMachineRows.length === 1 ? "" : "s"}
+                    </span>
                   </div>
+                  {machineryAssets.length === 0 && (
+                    <p className="text-[10px] text-amber-800">No machinery registered yet — add machines in the Machinery master first.</p>
+                  )}
 
-                  {selectedAsset && (
-                    <>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Working Hours *</label>
-                          <input
-                            type="number"
-                            step="0.5"
-                            min="0"
-                            value={machineWorkingHours}
-                            onChange={(e) => setMachineWorkingHours(e.target.value)}
-                            placeholder="e.g. 8"
-                            className="w-full p-2 border rounded text-xs bg-white font-mono font-bold text-emerald-700"
-                          />
+                  {machineRows.map((row, idx) => {
+                    const rowAsset = machineryAssets.find((a) => a.id === row.assetId);
+                    return (
+                      <div key={row.key} className="bg-white rounded-lg border border-amber-200 p-2.5 space-y-2.5 relative">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-black text-amber-900">
+                            🚜 Machine {idx + 1}
+                            {rowAsset && <span className="font-semibold text-slate-600"> — {rowAsset.assetNo} {rowAsset.assetType}</span>}
+                          </span>
+                          {machineRows.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeMachineRow(row.key)}
+                              className="text-rose-600 hover:bg-rose-50 rounded p-1"
+                              title="Remove this machine"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Idle Hours</label>
-                          <input
-                            type="number"
-                            step="0.5"
-                            min="0"
-                            value={machineIdleHours}
-                            onChange={(e) => setMachineIdleHours(e.target.value)}
-                            placeholder="0"
-                            className="w-full p-2 border rounded text-xs bg-white font-mono"
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Idle Reason</label>
-                          <input
-                            type="text"
-                            value={machineIdleReason}
-                            onChange={(e) => setMachineIdleReason(e.target.value)}
-                            placeholder="e.g. Waiting for material, rain stoppage"
-                            className="w-full p-2 border rounded text-xs bg-white"
-                          />
-                        </div>
-                      </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         <div>
-                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Hour Meter — Opening</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={hourMeterOpening}
-                            onChange={(e) => setHourMeterOpening(e.target.value)}
-                            className="w-full p-2 border rounded text-xs bg-white font-mono"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Hour Meter — Closing</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={hourMeterClosing}
-                            onChange={(e) => setHourMeterClosing(e.target.value)}
-                            placeholder="End of day reading"
-                            className="w-full p-2 border rounded text-xs bg-white font-mono font-bold"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Diesel Consumed (Ltr)</label>
-                          <input
-                            type="number"
-                            step="0.1"
-                            min="0"
-                            value={fuelConsumed}
-                            onChange={(e) => setFuelConsumed(e.target.value)}
-                            placeholder="e.g. 95"
-                            className="w-full p-2 border rounded text-xs bg-white font-mono font-bold text-orange-700"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Machine Status</label>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Machine / Equipment *</label>
                           <select
-                            value={machineStatus}
-                            onChange={(e) => setMachineStatus(e.target.value as any)}
+                            value={row.assetId || ""}
+                            onChange={(e) => handleMachineRowAssetChange(row.key, e.target.value ? parseInt(e.target.value) : undefined)}
                             className="w-full p-2 border rounded text-xs bg-white font-semibold"
                           >
-                            <option value="Working">Working</option>
-                            <option value="Idle">Idle (no work)</option>
-                            <option value="Breakdown">Breakdown</option>
-                            <option value="Maintenance">Maintenance</option>
+                            <option value="">Select machine...</option>
+                            {machineryAssets.map((a) => (
+                              <option key={a.id} value={a.id} disabled={machineRows.some((r) => r.key !== row.key && r.assetId === a.id)}>
+                                {a.assetNo} - {a.assetType}{a.makeModel ? ` (${a.makeModel})` : ""} — {a.status}
+                              </option>
+                            ))}
                           </select>
                         </div>
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Operator Name</label>
-                          <input
-                            type="text"
-                            value={machineOperator}
-                            onChange={(e) => setMachineOperator(e.target.value)}
-                            placeholder="Operator name"
-                            className="w-full p-2 border rounded text-xs bg-white"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Deployed At (chainage)</label>
-                          <input
-                            type="text"
-                            value={machineLocation}
-                            onChange={(e) => setMachineLocation(e.target.value)}
-                            placeholder="e.g. RD 3+500, Culvert site"
-                            className="w-full p-2 border rounded text-xs bg-white font-mono"
-                          />
-                        </div>
+
+                        {rowAsset && (
+                          <>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                              <div>
+                                <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Working Hours *</label>
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  min="0"
+                                  value={row.workingHours}
+                                  onChange={(e) => updateMachineRow(row.key, { workingHours: e.target.value })}
+                                  placeholder="e.g. 8"
+                                  className="w-full p-2 border rounded text-xs bg-white font-mono font-bold text-emerald-700"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Idle Hours</label>
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  min="0"
+                                  value={row.idleHours}
+                                  onChange={(e) => updateMachineRow(row.key, { idleHours: e.target.value })}
+                                  placeholder="0"
+                                  className="w-full p-2 border rounded text-xs bg-white font-mono"
+                                />
+                              </div>
+                              <div className="col-span-2">
+                                <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Idle Reason</label>
+                                <input
+                                  type="text"
+                                  value={row.idleReason}
+                                  onChange={(e) => updateMachineRow(row.key, { idleReason: e.target.value })}
+                                  placeholder="e.g. Waiting for material, rain stoppage"
+                                  className="w-full p-2 border rounded text-xs bg-white"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              <div>
+                                <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Hour Meter — Opening</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={row.hourMeterOpening}
+                                  onChange={(e) => updateMachineRow(row.key, { hourMeterOpening: e.target.value })}
+                                  className="w-full p-2 border rounded text-xs bg-white font-mono"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Hour Meter — Closing</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={row.hourMeterClosing}
+                                  onChange={(e) => updateMachineRow(row.key, { hourMeterClosing: e.target.value })}
+                                  placeholder="End of day reading"
+                                  className="w-full p-2 border rounded text-xs bg-white font-mono font-bold"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Diesel Consumed (Ltr)</label>
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  min="0"
+                                  value={row.fuelConsumed}
+                                  onChange={(e) => updateMachineRow(row.key, { fuelConsumed: e.target.value })}
+                                  placeholder="e.g. 95"
+                                  className="w-full p-2 border rounded text-xs bg-white font-mono font-bold text-orange-700"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                              <div>
+                                <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Machine Status</label>
+                                <select
+                                  value={row.status}
+                                  onChange={(e) => updateMachineRow(row.key, { status: e.target.value as MachineRow["status"] })}
+                                  className="w-full p-2 border rounded text-xs bg-white font-semibold"
+                                >
+                                  <option value="Working">Working</option>
+                                  <option value="Idle">Idle (no work)</option>
+                                  <option value="Breakdown">Breakdown</option>
+                                  <option value="Maintenance">Maintenance</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Operator Name</label>
+                                <input
+                                  type="text"
+                                  value={row.operator}
+                                  onChange={(e) => updateMachineRow(row.key, { operator: e.target.value })}
+                                  placeholder="Operator name"
+                                  className="w-full p-2 border rounded text-xs bg-white"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Deployed At (chainage)</label>
+                                <input
+                                  type="text"
+                                  value={row.location}
+                                  onChange={(e) => updateMachineRow(row.key, { location: e.target.value })}
+                                  placeholder="e.g. RD 3+500, Culvert site"
+                                  className="w-full p-2 border rounded text-xs bg-white font-mono"
+                                />
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </div>
-                      <p className="text-[10px] text-amber-800 bg-amber-100/70 rounded p-1.5">
-                        Submit par machinery log banega, hour-meter update hoga aur fuel efficiency auto-calculate hogi.
-                      </p>
-                    </>
-                  )}
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={addMachineRow}
+                    className="w-full py-2 border-2 border-dashed border-amber-400 rounded-lg text-amber-900 text-xs font-bold hover:bg-amber-100 flex items-center justify-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" /> Add Another Machine
+                  </button>
+                  <p className="text-[10px] text-amber-800 bg-amber-100/70 rounded p-1.5">
+                    Submit par har machine ke liye alag entry banegi — machinery log, hour-meter update aur fuel efficiency auto-calculate hogi.
+                  </p>
                 </div>
               )}
 
