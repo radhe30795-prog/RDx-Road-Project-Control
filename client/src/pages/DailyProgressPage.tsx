@@ -175,24 +175,12 @@ export default function DailyProgressPage() {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [roadId, setRoadId] = useState<number>(1);
   const [activityId, setActivityId] = useState<number>(1);
-  const [chainageFrom, setChainageFrom] = useState("");
-  const [chainageTo, setChainageTo] = useState("");
-  const [plannedQuantity, setPlannedQuantity] = useState("");
-  const [actualQuantity, setActualQuantity] = useState("");
-  const [billableQuantity, setBillableQuantity] = useState("");
-  const [billingStatus, setBillingStatus] = useState<"Pending" | "Ready for Bill" | "Included in Bill">("Pending");
-  const [unit, setUnit] = useState("Cum");
-  const [percentageComplete, setPercentageComplete] = useState("");
-  const [boqItemId, setBoqItemId] = useState<number | undefined>(undefined);
+  // Work & Material sections are MULTI-ROW (see WorkRow / MaterialRow below).
+  // materialId + materialConsumedQuantity stay shared: they are the work-section
+  // "Deduct Material Consumption" for the whole submission (applied to the first
+  // work row only, to avoid N× stock deduction).
   const [materialId, setMaterialId] = useState<number | undefined>(undefined);
   const [materialConsumedQuantity, setMaterialConsumedQuantity] = useState("");
-  // Material Section — daily material statement
-  const [matReceivedQty, setMatReceivedQty] = useState("");
-  const [matChallanNo, setMatChallanNo] = useState("");
-  const [matSupplier, setMatSupplier] = useState("");
-  const [matWastageQty, setMatWastageQty] = useState("");
-  const [matStorageLocation, setMatStorageLocation] = useState("");
-  const [matIssuedFor, setMatIssuedFor] = useState("");
   // Machine Section — equipment deployment log (MULTI-MACHINE: one row per machine)
   interface MachineRow {
     key: string;
@@ -285,12 +273,7 @@ export default function DailyProgressPage() {
   const isMaterialSection = activeSectionTab === "Material";
   const isMachineSection = activeSectionTab === "Machine";
 
-  const selectedMaterial = inventoryData?.find((m) => m.id === materialId);
-  const matOpeningBalance = selectedMaterial ? parseFloat(String(selectedMaterial.balanceQuantity || 0)) : 0;
-  const matReceived = parseFloat(matReceivedQty) || 0;
-  const matConsumed = parseFloat(materialConsumedQuantity) || 0;
-  const matWastage = parseFloat(matWastageQty) || 0;
-  const matClosingBalance = matOpeningBalance + matReceived - matConsumed - matWastage;
+  // (per-row material balances are computed via matRowBalance)
 
   const updateMachineRow = (key: string, patch: Partial<MachineRow>) => {
     setMachineRows((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -311,12 +294,127 @@ export default function DailyProgressPage() {
     (r) => r.assetId !== undefined && r.workingHours.trim() !== ""
   );
 
+  // Work Section — MULTI-ROW: one row per work item executed today
+  // (site par ek sath alag-alag kaam chalte hain — har kaam ki alag entry)
+  interface WorkRow {
+    key: string;
+    activityId: number;
+    chainageFrom: string;
+    chainageTo: string;
+    length: string;
+    actualQuantity: string;
+    unit: string;
+    percentageComplete: string;
+    boqItemId?: number;
+    billingStatus: "Pending" | "Ready for Bill" | "Included in Bill";
+    remarks: string;
+  }
+  const newWorkRow = (defaultActivityId?: number): WorkRow => ({
+    key: `w_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    activityId: defaultActivityId || 0,
+    chainageFrom: "",
+    chainageTo: "",
+    length: "",
+    actualQuantity: "",
+    unit: "Cum",
+    percentageComplete: "",
+    boqItemId: undefined,
+    billingStatus: "Pending",
+    remarks: "",
+  });
+  const [workRows, setWorkRows] = useState<WorkRow[]>([newWorkRow()]);
+  // Parse "3+500" style chainage to meters for auto length
+  const parseChainageM = (ch: string): number | null => {
+    const m = ch.trim().match(/^(\d+)\s*\+\s*(\d+(?:\.\d+)?)$/);
+    if (!m) return null;
+    return parseInt(m[1], 10) * 1000 + parseFloat(m[2]);
+  };
+  const updateWorkRow = (key: string, patch: Partial<WorkRow>) => {
+    setWorkRows((rows) =>
+      rows.map((r) => {
+        if (r.key !== key) return r;
+        const next = { ...r, ...patch };
+        // Auto-fill length when both chainages parse and length is empty
+        if ((patch.chainageFrom !== undefined || patch.chainageTo !== undefined) && !next.length.trim()) {
+          const fromM = parseChainageM(next.chainageFrom);
+          const toM = parseChainageM(next.chainageTo);
+          if (fromM !== null && toM !== null && toM >= fromM) {
+            next.length = `${(toM - fromM).toFixed(0)} m`;
+          }
+        }
+        return next;
+      })
+    );
+  };
+  const addWorkRow = () =>
+    setWorkRows((rows) => [...rows, newWorkRow(availableActivities[0]?.activity?.id || 0)]);
+  const removeWorkRow = (key: string) => {
+    setWorkRows((rows) => (rows.length > 1 ? rows.filter((r) => r.key !== key) : rows));
+  };
+  const validWorkRows = workRows.filter(
+    (r) => r.activityId !== 0 && r.actualQuantity.trim() !== ""
+  );
+
+  // Material Section — MULTI-ROW: one row per material (ek din me alag-alag material aata hai)
+  interface MaterialRow {
+    key: string;
+    materialId?: number;
+    receivedQty: string;
+    challanNo: string;
+    supplier: string;
+    consumedQty: string;
+    issuedFor: string;
+    wastageQty: string;
+    storageLocation: string;
+  }
+  const newMaterialRow = (): MaterialRow => ({
+    key: `mt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    materialId: undefined,
+    receivedQty: "",
+    challanNo: "",
+    supplier: "",
+    consumedQty: "",
+    issuedFor: "",
+    wastageQty: "",
+    storageLocation: "",
+  });
+  const [matRows, setMatRows] = useState<MaterialRow[]>([newMaterialRow()]);
+  const updateMaterialRow = (key: string, patch: Partial<MaterialRow>) => {
+    setMatRows((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  };
+  const addMaterialRow = () => setMatRows((rows) => [...rows, newMaterialRow()]);
+  const removeMaterialRow = (key: string) => {
+    setMatRows((rows) => (rows.length > 1 ? rows.filter((r) => r.key !== key) : rows));
+  };
+  const matRowBalance = (row: MaterialRow) => {
+    const mat = inventoryData?.find((m) => m.id === row.materialId);
+    const opening = mat ? parseFloat(String(mat.balanceQuantity || 0)) : 0;
+    const received = parseFloat(row.receivedQty) || 0;
+    const consumed = parseFloat(row.consumedQty) || 0;
+    const wastage = parseFloat(row.wastageQty) || 0;
+    return { mat, opening, received, consumed, wastage, closing: opening + received - consumed - wastage };
+  };
+  const validMatRows = matRows.filter(
+    (r) => r.materialId !== undefined && (r.receivedQty.trim() !== "" || r.consumedQty.trim() !== "")
+  );
+
   const canSubmitDpr =
-    isMaterialSection
-      ? materialId !== undefined && (matReceivedQty.trim() !== "" || materialConsumedQuantity.trim() !== "")
-      : isMachineSection
-        ? validMachineRows.length > 0
-        : actualQuantity.trim() !== "" && percentageComplete.trim() !== "";
+    isWorkSection
+      ? validWorkRows.length > 0
+      : isMaterialSection
+        ? validMatRows.length > 0
+        : isMachineSection
+          ? validMachineRows.length > 0
+          : false;
+
+  // Default work-row activity to first available activity once activities load
+  // (also re-applies when road changes and a fresh activity list arrives)
+  useEffect(() => {
+    if (availableActivities.length > 0) {
+      const firstId = availableActivities[0].activity.id;
+      setWorkRows((rows) => rows.map((r) => (r.activityId === 0 ? { ...r, activityId: firstId } : r)));
+    }
+  }, [availableActivities]);
 
   const handleSectionTabChange = (tabId: typeof activeSectionTab) => {
     setActiveSectionTab(tabId);
@@ -333,23 +431,10 @@ export default function DailyProgressPage() {
   const resetDprForm = () => {
     setActiveSectionTab("Highway Works");
     setDate(new Date().toISOString().split("T")[0]);
-    setChainageFrom("");
-    setChainageTo("");
-    setPlannedQuantity("");
-    setActualQuantity("");
-    setBillableQuantity("");
-    setBillingStatus("Pending");
-    setUnit("Cum");
-    setPercentageComplete("");
-    setBoqItemId(undefined);
+    setWorkRows([newWorkRow()]);
+    setMatRows([newMaterialRow()]);
     setMaterialId(undefined);
     setMaterialConsumedQuantity("");
-    setMatReceivedQty("");
-    setMatChallanNo("");
-    setMatSupplier("");
-    setMatWastageQty("");
-    setMatStorageLocation("");
-    setMatIssuedFor("");
     setMachineRows([newMachineRow()]);
     setManpower("");
     setMachinery("");
@@ -403,7 +488,7 @@ export default function DailyProgressPage() {
           fileName: file.name,
           fileBase64,
           caption: photoCaption.trim() || `${activeSectionTab} site photo`,
-          chainage: photoChainage.trim() || chainageFrom,
+          chainage: photoChainage.trim() || (isWorkSection ? workRows[0]?.chainageFrom || "" : ""),
         },
       ]);
       setPhotoCaption("");
@@ -491,73 +576,106 @@ export default function DailyProgressPage() {
 
   const handleSubmitDpr = async () => {
     const selectedRoad = availableRoads.find((r) => r.id === roadId);
-    const selectedAct = availableActivities.find((a) => a.activity.id === activityId)?.activity;
     const roadName = selectedRoad?.roadName || `Road #${roadId}`;
-    const activityName = selectedAct?.activityName || `Activity #${activityId}`;
+    const activityNameFor = (aid?: number) => {
+      const a = availableActivities.find((x) => x.activity.id === aid)?.activity;
+      return a?.activityName || (aid ? `Activity #${aid}` : "General");
+    };
+    const newDraftId = () => `dpr_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
-    const basePayload = {
+    const sharedBase = {
       date,
       projectId: activeProjectId as number,
       roadId,
       // Material / Machine entries are standalone registers — no activity linkage by default
       activityId: activityId || undefined,
       sectionType: activeSectionTab,
-      // Work sections only: chainage, quantities, BOQ linkage, billing
-      chainageFrom: isWorkSection ? (chainageFrom || undefined) : undefined,
-      chainageTo: isWorkSection ? (chainageTo || undefined) : undefined,
-      boqItemId: isWorkSection ? (boqItemId || undefined) : undefined,
-      plannedQuantity: isWorkSection ? plannedQuantity : "0.00",
-      actualQuantity: isWorkSection ? actualQuantity : "0.00",
-      billableQuantity: isWorkSection ? (billableQuantity || actualQuantity || undefined) : undefined,
-      billingStatus,
-      unit: isWorkSection ? unit : (isMaterialSection ? (selectedMaterial?.unit || "Nos") : "Nos"),
-      percentageComplete: isWorkSection ? percentageComplete : "0.00",
-      // Material section: daily material statement
-      materialId: materialId || undefined,
-      materialOpeningBalance: isMaterialSection && materialId ? matOpeningBalance.toFixed(3) : undefined,
-      materialConsumedQuantity: materialConsumedQuantity ? materialConsumedQuantity : undefined,
-      materialReceivedQuantity: isMaterialSection && matReceivedQty ? matReceivedQty : undefined,
-      materialChallanNo: isMaterialSection ? (matChallanNo.trim() || undefined) : undefined,
-      materialSupplier: isMaterialSection ? (matSupplier.trim() || undefined) : undefined,
-      materialWastageQuantity: isMaterialSection && matWastageQty ? matWastageQty : undefined,
-      materialStorageLocation: isMaterialSection ? (matStorageLocation.trim() || undefined) : undefined,
       manpower,
-      machinery: isWorkSection ? machinery : undefined,
       weather,
       hindrance,
-      remarks: isMaterialSection && matIssuedFor.trim()
-        ? `${remarks.trim()}${remarks.trim() ? " | " : ""}Issued for: ${matIssuedFor.trim()}`
-        : remarks,
+      remarks,
     };
 
+    // Work section: ONE daily_progress row per work item (same date/road/project)
+    const workPayloads = validWorkRows.map((row, idx) => ({
+      ...sharedBase,
+      clientDraftId: newDraftId(),
+      activityId: row.activityId || undefined,
+      chainageFrom: row.chainageFrom || undefined,
+      chainageTo: row.chainageTo || undefined,
+      boqItemId: row.boqItemId || undefined,
+      plannedQuantity: "0.00",
+      actualQuantity: row.actualQuantity || "0.00",
+      billableQuantity: row.actualQuantity || undefined,
+      billingStatus: row.billingStatus,
+      unit: row.unit,
+      percentageComplete: row.percentageComplete || "0.00",
+      // Shared work-level material consumption → first row only (avoid N× stock deduction)
+      materialId: idx === 0 ? materialId || undefined : undefined,
+      materialConsumedQuantity: idx === 0 && materialConsumedQuantity ? materialConsumedQuantity : undefined,
+      machinery: machinery || undefined,
+      remarks: row.remarks.trim()
+        ? `${remarks.trim()}${remarks.trim() ? " | " : ""}${row.remarks.trim()}`
+        : remarks,
+    }));
+
+    // Material section: ONE daily_progress row per material (same date/road/project)
+    const matPayloads = validMatRows.map((row) => {
+      const mat = inventoryData?.find((m) => m.id === row.materialId);
+      const opening = mat ? parseFloat(String(mat.balanceQuantity || 0)) : 0;
+      return {
+        ...sharedBase,
+        clientDraftId: newDraftId(),
+        plannedQuantity: "0.00",
+        actualQuantity: "0.00",
+        percentageComplete: "0.00",
+        unit: mat?.unit || "Nos",
+        materialId: row.materialId,
+        materialOpeningBalance: opening.toFixed(3),
+        materialReceivedQuantity: row.receivedQty || undefined,
+        materialChallanNo: row.challanNo.trim() || undefined,
+        materialSupplier: row.supplier.trim() || undefined,
+        materialConsumedQuantity: row.consumedQty || undefined,
+        materialWastageQuantity: row.wastageQty || undefined,
+        materialStorageLocation: row.storageLocation.trim() || undefined,
+        remarks: row.issuedFor.trim()
+          ? `${remarks.trim()}${remarks.trim() ? " | " : ""}Issued for: ${row.issuedFor.trim()}`
+          : remarks,
+      };
+    });
+
     // Machine section: ONE daily_progress row per machine (same date/road/project)
-    const payloads = isMachineSection
-      ? validMachineRows.map((row) => ({
-          ...basePayload,
-          clientDraftId: `dpr_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-          machineryAssetId: row.assetId,
-          machineWorkingHours: row.workingHours || undefined,
-          machineIdleHours: row.idleHours || undefined,
-          machineIdleReason: row.idleReason.trim() || undefined,
-          hourMeterOpening: row.hourMeterOpening || undefined,
-          hourMeterClosing: row.hourMeterClosing || undefined,
-          fuelConsumed: row.fuelConsumed || undefined,
-          machineStatus: row.status,
-          machineOperator: row.operator.trim() || undefined,
-          machineLocation: row.location.trim() || undefined,
-        }))
-      : [
-          {
-            ...basePayload,
-            clientDraftId: `dpr_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-          },
-        ];
+    const machinePayloads = validMachineRows.map((row) => ({
+      ...sharedBase,
+      clientDraftId: newDraftId(),
+      plannedQuantity: "0.00",
+      actualQuantity: "0.00",
+      billingStatus: "Pending" as const,
+      unit: "Nos",
+      percentageComplete: "0.00",
+      machineryAssetId: row.assetId,
+      machineWorkingHours: row.workingHours || undefined,
+      machineIdleHours: row.idleHours || undefined,
+      machineIdleReason: row.idleReason.trim() || undefined,
+      hourMeterOpening: row.hourMeterOpening || undefined,
+      hourMeterClosing: row.hourMeterClosing || undefined,
+      fuelConsumed: row.fuelConsumed || undefined,
+      machineStatus: row.status,
+      machineOperator: row.operator.trim() || undefined,
+      machineLocation: row.location.trim() || undefined,
+    }));
+
+    const payloads = isWorkSection ? workPayloads : isMaterialSection ? matPayloads : machinePayloads;
+    const entryWord =
+      payloads.length > 1
+        ? `${payloads.length} ${activeSectionTab} entries`
+        : "1 entry";
 
     if (!isOnline) {
       payloads.forEach((payload) =>
         enqueueOfflineDprDraft({
           roadName: selectedRoad?.roadName || `Road #${roadId}`,
-          activityName: selectedAct?.activityName || `Activity #${activityId}`,
+          activityName: activityNameFor(payload.activityId),
           payload,
           photoAttachments: dprPhotos,
         })
@@ -565,20 +683,22 @@ export default function DailyProgressPage() {
       reloadOfflineQueue();
       setIsAddOpen(false);
       setDprPhotos([]);
-      toast.success(`Saved offline on this device${isMachineSection ? ` (${payloads.length} machine entries)` : ""}`, {
+      toast.success(`Saved offline on this device (${entryWord})`, {
         description: "DPR is stored locally and will sync when internet returns.",
       });
       return;
     }
 
-    payloads.forEach((payload) => archiveDprDraft({ roadName, activityName, payload, syncStatus: "pending" }));
+    payloads.forEach((payload) =>
+      archiveDprDraft({ roadName, activityName: activityNameFor(payload.activityId), payload, syncStatus: "pending" })
+    );
     try {
       for (const payload of payloads) {
         await createDprMutation.mutateAsync(payload);
         markArchivedDprSynced(payload.clientDraftId);
       }
       if (dprPhotos.length && payloads.length > 0) {
-        // Photos attach to the first machine entry (shared site photos for the day)
+        // Photos attach to the first entry (shared site photos for the day)
         await uploadDprPhotos(payloads[0].clientDraftId, payloads[0].sectionType, dprPhotos);
       }
       refetch();
@@ -586,15 +706,15 @@ export default function DailyProgressPage() {
       setIsAddOpen(false);
       setDprPhotos([]);
       toast.success(
-        isMachineSection && payloads.length > 1
-          ? `${payloads.length} machine entries logged and synced!`
+        payloads.length > 1
+          ? `${payloads.length} ${activeSectionTab} entries logged and synced!`
           : "DPR logged and synced to server!"
       );
     } catch (error) {
       payloads.forEach((payload) =>
         enqueueOfflineDprDraft({
           roadName,
-          activityName,
+          activityName: activityNameFor(payload.activityId),
           payload,
           photoAttachments: dprPhotos,
         })
@@ -1280,16 +1400,17 @@ export default function DailyProgressPage() {
                   </select>
                 </div>
 
+                {!isWorkSection && (
                 <div>
                   <label className="block font-medium text-slate-700 mb-1">
-                    {isWorkSection ? "Activity Being Executed" : "Linked Activity (optional)"}
+                    Linked Activity (optional)
                   </label>
                   <select
                     value={activityId}
                     onChange={(e) => setActivityId(parseInt(e.target.value))}
                     className="w-full p-2 border rounded"
                   >
-                    {!isWorkSection && <option value={0}>— General / Not linked —</option>}
+                    <option value={0}>— General / Not linked —</option>
                     {availableActivities.map(({ activity: a }) => (
                       <option key={a.id} value={a.id}>
                         {a.taskId} - {a.activityName} ({a.phase})
@@ -1297,298 +1418,390 @@ export default function DailyProgressPage() {
                     ))}
                   </select>
                 </div>
-              </div>
-
-              {/* Chainage — work sections only (BT / CC road split) */}
-              {isWorkSection && (
-              <div className="grid grid-cols-2 gap-2 p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Start Chainage (RD From)</label>
-                  <input
-                    type="text"
-                    value={chainageFrom}
-                    onChange={(e) => setChainageFrom(e.target.value)}
-                    placeholder="e.g. 0+000 or 3+500"
-                    className="w-full p-1.5 border rounded font-mono text-xs bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">End Chainage (RD To)</label>
-                  <input
-                    type="text"
-                    value={chainageTo}
-                    onChange={(e) => setChainageTo(e.target.value)}
-                    placeholder="e.g. 3+500 or 4+500"
-                    className="w-full p-1.5 border rounded font-mono text-xs bg-white"
-                  />
-                </div>
-              </div>
-              )}
-
-              {/* Quantities & Billing Quantity — work sections only */}
-              {isWorkSection && (
-              <>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <div>
-                  <label className="block font-medium text-slate-700 mb-1">Planned Qty</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={plannedQuantity}
-                    onChange={(e) => setPlannedQuantity(e.target.value)}
-                    className="w-full p-2 border rounded font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block font-medium text-slate-700 mb-1">Actual Qty Done</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={actualQuantity}
-                    onChange={(e) => {
-                      setActualQuantity(e.target.value);
-                      if (!billableQuantity) setBillableQuantity(e.target.value);
-                    }}
-                    className="w-full p-2 border rounded font-mono font-bold text-emerald-700"
-                  />
-                </div>
-                <div>
-                  <label className="block font-medium text-slate-700 mb-1">Billable Quantity</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={billableQuantity}
-                    onChange={(e) => setBillableQuantity(e.target.value)}
-                    className="w-full p-2 border rounded font-mono font-bold text-amber-700"
-                  />
-                </div>
-                <div>
-                  <label className="block font-medium text-slate-700 mb-1">Unit</label>
-                  <select
-                    value={unit}
-                    onChange={(e) => setUnit(e.target.value)}
-                    className="w-full p-2 border rounded font-bold"
-                  >
-                    {COMMON_UNITS.map((u) => (
-                      <option key={u} value={u}>{u}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-medium text-slate-700 mb-1">Billing Verification Status</label>
-                  <select
-                    value={billingStatus}
-                    onChange={(e) => setBillingStatus(e.target.value as any)}
-                    className="w-full p-2 border rounded font-semibold"
-                  >
-                    <option value="Ready for Bill">Ready for Bill (Approved for RA Bill)</option>
-                    <option value="Pending">Pending Measurement Verification</option>
-                    <option value="Included in Bill">Included in Current RA Bill</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-medium text-slate-700 mb-1">Overall Progress (%)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={percentageComplete}
-                    onChange={(e) => setPercentageComplete(e.target.value)}
-                    className="w-full p-2 border rounded font-mono font-bold text-slate-900"
-                  />
-                </div>
-              </div>
-              </>
-              )}
-
-              {/* BOQ & Material Section Linkage — work sections only */}
-              {isWorkSection && (
-              <div className="p-3 bg-amber-50/70 rounded-lg border border-amber-200/80 space-y-2">
-                <span className="text-[11px] font-bold text-amber-950 uppercase tracking-wider block">
-                  ERP Contract BOQ & Material Stock Auto-Deduction
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Link Contract BOQ Item</label>
-                    <select
-                      value={boqItemId || ""}
-                      onChange={(e) => setBoqItemId(e.target.value ? parseInt(e.target.value) : undefined)}
-                      className="w-full p-2 border rounded text-xs bg-white"
-                    >
-                      <option value="">None / Direct Activity Execution</option>
-                      {boqData?.map(({ boq }) => (
-                        <option key={boq.id} value={boq.id}>
-                          {boq.itemCode} - {boq.chapter} (Bal: {parseFloat(String(boq.balanceQuantity)).toLocaleString()} {boq.unit})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Deduct Material Consumption</label>
-                    <select
-                      value={materialId || ""}
-                      onChange={(e) => setMaterialId(e.target.value ? parseInt(e.target.value) : undefined)}
-                      className="w-full p-2 border rounded text-xs bg-white"
-                    >
-                      <option value="">None / No Material Issued</option>
-                      {inventoryData?.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.materialCode} - {m.materialName} (Stock: {parseFloat(String(m.balanceQuantity)).toLocaleString()} {m.unit})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {materialId && (
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Quantity Consumed on Site</label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      value={materialConsumedQuantity}
-                      onChange={(e) => setMaterialConsumedQuantity(e.target.value)}
-                      placeholder="e.g. 24.500"
-                      className="w-full p-2 border rounded text-xs bg-white font-mono font-bold text-blue-700"
-                    />
-                  </div>
                 )}
               </div>
-              )}
 
-              {/* ============ MATERIAL SECTION: Daily Material Statement ============ */}
-              {isMaterialSection && (
-                <div className="p-3 bg-purple-50/70 rounded-lg border border-purple-200 space-y-3">
-                  <span className="text-[11px] font-bold text-purple-950 uppercase tracking-wider block">
-                    Daily Material Statement — Receipt, Consumption & Stock
+              {/* ============ WORK SECTIONS: Multi-row — ek din me alag-alag kaam ============ */}
+              {isWorkSection && (
+              <div className="p-3 bg-slate-50/70 rounded-lg border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-900 uppercase tracking-wider">
+                    Work Executed Today — Chainage-wise Entries
                   </span>
+                  <span className="text-[10px] font-bold bg-slate-900 text-amber-400 px-2 py-0.5 rounded-full">
+                    {validWorkRows.length} work item{validWorkRows.length === 1 ? "" : "s"}
+                  </span>
+                </div>
 
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Material *</label>
-                    <select
-                      value={materialId || ""}
-                      onChange={(e) => setMaterialId(e.target.value ? parseInt(e.target.value) : undefined)}
-                      className="w-full p-2 border rounded text-xs bg-white font-semibold"
-                    >
-                      <option value="">Select material...</option>
-                      {inventoryData?.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.materialCode} - {m.materialName} (Stock: {parseFloat(String(m.balanceQuantity)).toLocaleString()} {m.unit})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {selectedMaterial && (
-                    <>
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div className="bg-white rounded-lg border border-purple-100 p-2">
-                          <span className="text-[10px] text-slate-500 block">Opening Balance</span>
-                          <span className="font-mono font-black text-slate-800 text-sm">{matOpeningBalance.toLocaleString()} {selectedMaterial.unit}</span>
-                        </div>
-                        <div className="bg-white rounded-lg border border-purple-100 p-2">
-                          <span className="text-[10px] text-slate-500 block">Net Change Today</span>
-                          <span className={`font-mono font-black text-sm ${(matReceived - matConsumed - matWastage) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                            {(matReceived - matConsumed - matWastage) >= 0 ? "+" : ""}{(matReceived - matConsumed - matWastage).toLocaleString()} {selectedMaterial.unit}
-                          </span>
-                        </div>
-                        <div className="bg-purple-600 rounded-lg p-2">
-                          <span className="text-[10px] text-purple-200 block">Closing Balance</span>
-                          <span className="font-mono font-black text-white text-sm">{matClosingBalance.toLocaleString()} {selectedMaterial.unit}</span>
-                        </div>
+                {workRows.map((row, idx) => {
+                  const rowAct = availableActivities.find((x) => x.activity.id === row.activityId)?.activity;
+                  return (
+                    <div key={row.key} className="bg-white rounded-lg border border-slate-200 p-2.5 space-y-2.5 relative">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-black text-slate-900">
+                          🔨 Work {idx + 1}
+                          {rowAct && <span className="font-semibold text-slate-600"> — {rowAct.taskId} {rowAct.activityName}</span>}
+                        </span>
+                        {workRows.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeWorkRow(row.key)}
+                            className="text-rose-600 hover:bg-rose-50 rounded p-1"
+                            title="Remove this work entry"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Activity Being Executed *</label>
+                        <select
+                          value={row.activityId || ""}
+                          onChange={(e) => updateWorkRow(row.key, { activityId: e.target.value ? parseInt(e.target.value) : 0 })}
+                          className="w-full p-2 border rounded text-xs bg-white font-semibold"
+                        >
+                          <option value="">Select activity...</option>
+                          {availableActivities.map(({ activity: a }) => (
+                            <option key={a.id} value={a.id}>
+                              {a.taskId} - {a.activityName} ({a.phase})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2">
                         <div>
-                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Received Today ({selectedMaterial.unit})</label>
-                          <input
-                            type="number"
-                            step="0.001"
-                            value={matReceivedQty}
-                            onChange={(e) => setMatReceivedQty(e.target.value)}
-                            placeholder="e.g. 400"
-                            className="w-full p-2 border rounded text-xs bg-white font-mono font-bold text-emerald-700"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Challan / Invoice No.</label>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">RD From</label>
                           <input
                             type="text"
-                            value={matChallanNo}
-                            onChange={(e) => setMatChallanNo(e.target.value)}
-                            placeholder="e.g. CH-4821"
+                            value={row.chainageFrom}
+                            onChange={(e) => updateWorkRow(row.key, { chainageFrom: e.target.value })}
+                            placeholder="e.g. 0+000"
                             className="w-full p-2 border rounded text-xs bg-white font-mono"
                           />
                         </div>
                         <div>
-                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Supplier / Vehicle No.</label>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">RD To</label>
                           <input
                             type="text"
-                            value={matSupplier}
-                            onChange={(e) => setMatSupplier(e.target.value)}
-                            placeholder="e.g. Sharma Traders / CG10-AB-1234"
-                            className="w-full p-2 border rounded text-xs bg-white"
+                            value={row.chainageTo}
+                            onChange={(e) => updateWorkRow(row.key, { chainageTo: e.target.value })}
+                            placeholder="e.g. 0+500"
+                            className="w-full p-2 border rounded text-xs bg-white font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Length (auto)</label>
+                          <input
+                            type="text"
+                            value={row.length}
+                            onChange={(e) => updateWorkRow(row.key, { length: e.target.value })}
+                            placeholder="auto"
+                            className="w-full p-2 border rounded text-xs bg-white font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Qty Done *</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={row.actualQuantity}
+                            onChange={(e) => updateWorkRow(row.key, { actualQuantity: e.target.value })}
+                            placeholder="e.g. 450"
+                            className="w-full p-2 border rounded text-xs bg-white font-mono font-bold text-emerald-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Unit</label>
+                          <select
+                            value={row.unit}
+                            onChange={(e) => updateWorkRow(row.key, { unit: e.target.value })}
+                            className="w-full p-2 border rounded text-xs bg-white font-bold"
+                          >
+                            {COMMON_UNITS.map((u) => (
+                              <option key={u} value={u}>{u}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Progress %</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="1"
+                            value={row.percentageComplete}
+                            onChange={(e) => updateWorkRow(row.key, { percentageComplete: e.target.value })}
+                            placeholder="e.g. 60"
+                            className="w-full p-2 border rounded text-xs bg-white font-mono font-bold"
                           />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
-                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Consumed / Issued Today ({selectedMaterial.unit})</label>
-                          <input
-                            type="number"
-                            step="0.001"
-                            value={materialConsumedQuantity}
-                            onChange={(e) => setMaterialConsumedQuantity(e.target.value)}
-                            placeholder="e.g. 24.500"
-                            className="w-full p-2 border rounded text-xs bg-white font-mono font-bold text-blue-700"
-                          />
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Link Contract BOQ Item</label>
+                          <select
+                            value={row.boqItemId || ""}
+                            onChange={(e) => updateWorkRow(row.key, { boqItemId: e.target.value ? parseInt(e.target.value) : undefined })}
+                            className="w-full p-2 border rounded text-xs bg-white"
+                          >
+                            <option value="">None / Direct Activity Execution</option>
+                            {boqData?.map(({ boq }) => (
+                              <option key={boq.id} value={boq.id}>
+                                {boq.itemCode} - {boq.chapter} (Bal: {parseFloat(String(boq.balanceQuantity)).toLocaleString()} {boq.unit})
+                              </option>
+                            ))}
+                          </select>
                         </div>
                         <div>
-                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Issued For (activity / chainage)</label>
-                          <input
-                            type="text"
-                            value={matIssuedFor}
-                            onChange={(e) => setMatIssuedFor(e.target.value)}
-                            placeholder="e.g. CC road panel, RD 2+000 to 2+500"
-                            className="w-full p-2 border rounded text-xs bg-white"
-                          />
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Billing Status</label>
+                          <select
+                            value={row.billingStatus}
+                            onChange={(e) => updateWorkRow(row.key, { billingStatus: e.target.value as WorkRow["billingStatus"] })}
+                            className="w-full p-2 border rounded text-xs bg-white font-semibold"
+                          >
+                            <option value="Ready for Bill">Ready for Bill (Approved for RA Bill)</option>
+                            <option value="Pending">Pending Measurement Verification</option>
+                            <option value="Included in Bill">Included in Current RA Bill</option>
+                          </select>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Wastage / Damage ({selectedMaterial.unit})</label>
-                          <input
-                            type="number"
-                            step="0.001"
-                            value={matWastageQty}
-                            onChange={(e) => setMatWastageQty(e.target.value)}
-                            placeholder="0"
-                            className="w-full p-2 border rounded text-xs bg-white font-mono font-bold text-rose-700"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Storage Location</label>
-                          <input
-                            type="text"
-                            value={matStorageLocation}
-                            onChange={(e) => setMatStorageLocation(e.target.value)}
-                            placeholder="e.g. Base camp stack yard"
-                            className="w-full p-2 border rounded text-xs bg-white"
-                          />
-                        </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Remarks (this work item)</label>
+                        <input
+                          type="text"
+                          value={row.remarks}
+                          onChange={(e) => updateWorkRow(row.key, { remarks: e.target.value })}
+                          placeholder="e.g. 2nd layer completed, roller passed"
+                          className="w-full p-2 border rounded text-xs bg-white"
+                        />
                       </div>
-                      <p className="text-[10px] text-purple-800 bg-purple-100/70 rounded p-1.5">
-                        Receipt auto-creates a GRN and increases stock; consumption & wastage auto-deduct stock on submit.
-                      </p>
-                    </>
-                  )}
+                    </div>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  onClick={addWorkRow}
+                  className="w-full py-2 border-2 border-dashed border-slate-400 rounded-lg text-slate-800 text-xs font-bold hover:bg-slate-100 flex items-center justify-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" /> Add Another Work
+                </button>
+
+                {/* Shared material consumption for the whole submission (first row only) */}
+                <div className="p-2.5 bg-amber-50/70 rounded-lg border border-amber-200/80 space-y-2">
+                  <span className="text-[11px] font-bold text-amber-950 uppercase tracking-wider block">
+                    Material Stock Auto-Deduction (applies once per submit)
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Deduct Material Consumption</label>
+                      <select
+                        value={materialId || ""}
+                        onChange={(e) => setMaterialId(e.target.value ? parseInt(e.target.value) : undefined)}
+                        className="w-full p-2 border rounded text-xs bg-white"
+                      >
+                        <option value="">None / No Material Issued</option>
+                        {inventoryData?.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.materialCode} - {m.materialName} (Stock: {parseFloat(String(m.balanceQuantity)).toLocaleString()} {m.unit})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {materialId && (
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Quantity Consumed on Site</label>
+                        <input
+                          type="number"
+                          step="0.001"
+                          value={materialConsumedQuantity}
+                          onChange={(e) => setMaterialConsumedQuantity(e.target.value)}
+                          placeholder="e.g. 24.500"
+                          className="w-full p-2 border rounded text-xs bg-white font-mono font-bold text-blue-700"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-600 bg-slate-100/70 rounded p-1.5">
+                  Submit par har work item ki alag entry banegi — chainage-wise progress aur BOQ linkage ke sath.
+                </p>
+              </div>
+              )}
+
+              {/* ============ MATERIAL SECTION: Daily Material Statement (MULTI-ROW) ============ */}
+              {isMaterialSection && (
+                <div className="p-3 bg-purple-50/70 rounded-lg border border-purple-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-purple-950 uppercase tracking-wider">
+                      Daily Material Statement — Receipt, Consumption & Stock
+                    </span>
+                    <span className="text-[10px] font-bold bg-purple-600 text-white px-2 py-0.5 rounded-full">
+                      {validMatRows.length} material{validMatRows.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
+
+                  {matRows.map((row, idx) => {
+                    const bal = matRowBalance(row);
+                    const net = bal.received - bal.consumed - bal.wastage;
+                    return (
+                      <div key={row.key} className="bg-white rounded-lg border border-purple-200 p-2.5 space-y-2.5 relative">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-black text-purple-950">
+                            📦 Material {idx + 1}
+                            {bal.mat && <span className="font-semibold text-slate-600"> — {bal.mat.materialCode} {bal.mat.materialName}</span>}
+                          </span>
+                          {matRows.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeMaterialRow(row.key)}
+                              className="text-rose-600 hover:bg-rose-50 rounded p-1"
+                              title="Remove this material"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Material *</label>
+                          <select
+                            value={row.materialId || ""}
+                            onChange={(e) => updateMaterialRow(row.key, { materialId: e.target.value ? parseInt(e.target.value) : undefined })}
+                            className="w-full p-2 border rounded text-xs bg-white font-semibold"
+                          >
+                            <option value="">Select material...</option>
+                            {inventoryData?.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.materialCode} - {m.materialName} (Stock: {parseFloat(String(m.balanceQuantity)).toLocaleString()} {m.unit})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {bal.mat && (
+                          <>
+                            <div className="grid grid-cols-3 gap-2 text-center">
+                              <div className="bg-white rounded-lg border border-purple-100 p-2">
+                                <span className="text-[10px] text-slate-500 block">Opening Balance</span>
+                                <span className="font-mono font-black text-slate-800 text-sm">{bal.opening.toLocaleString()} {bal.mat.unit}</span>
+                              </div>
+                              <div className="bg-white rounded-lg border border-purple-100 p-2">
+                                <span className="text-[10px] text-slate-500 block">Net Change Today</span>
+                                <span className={`font-mono font-black text-sm ${net >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                                  {net >= 0 ? "+" : ""}{net.toLocaleString()} {bal.mat.unit}
+                                </span>
+                              </div>
+                              <div className="bg-purple-600 rounded-lg p-2">
+                                <span className="text-[10px] text-purple-200 block">Closing Balance</span>
+                                <span className="font-mono font-black text-white text-sm">{bal.closing.toLocaleString()} {bal.mat.unit}</span>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                              <div>
+                                <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Received Today ({bal.mat.unit})</label>
+                                <input
+                                  type="number"
+                                  step="0.001"
+                                  value={row.receivedQty}
+                                  onChange={(e) => updateMaterialRow(row.key, { receivedQty: e.target.value })}
+                                  placeholder="e.g. 400"
+                                  className="w-full p-2 border rounded text-xs bg-white font-mono font-bold text-emerald-700"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Challan / Invoice No.</label>
+                                <input
+                                  type="text"
+                                  value={row.challanNo}
+                                  onChange={(e) => updateMaterialRow(row.key, { challanNo: e.target.value })}
+                                  placeholder="e.g. CH-4821"
+                                  className="w-full p-2 border rounded text-xs bg-white font-mono"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Supplier / Vehicle No.</label>
+                                <input
+                                  type="text"
+                                  value={row.supplier}
+                                  onChange={(e) => updateMaterialRow(row.key, { supplier: e.target.value })}
+                                  placeholder="e.g. Sharma Traders / CG10-AB-1234"
+                                  className="w-full p-2 border rounded text-xs bg-white"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Consumed / Issued Today ({bal.mat.unit})</label>
+                                <input
+                                  type="number"
+                                  step="0.001"
+                                  value={row.consumedQty}
+                                  onChange={(e) => updateMaterialRow(row.key, { consumedQty: e.target.value })}
+                                  placeholder="e.g. 24.500"
+                                  className="w-full p-2 border rounded text-xs bg-white font-mono font-bold text-blue-700"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Issued For (activity / chainage)</label>
+                                <input
+                                  type="text"
+                                  value={row.issuedFor}
+                                  onChange={(e) => updateMaterialRow(row.key, { issuedFor: e.target.value })}
+                                  placeholder="e.g. CC road panel, RD 2+000 to 2+500"
+                                  className="w-full p-2 border rounded text-xs bg-white"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Wastage / Damage ({bal.mat.unit})</label>
+                                <input
+                                  type="number"
+                                  step="0.001"
+                                  value={row.wastageQty}
+                                  onChange={(e) => updateMaterialRow(row.key, { wastageQty: e.target.value })}
+                                  placeholder="0"
+                                  className="w-full p-2 border rounded text-xs bg-white font-mono font-bold text-rose-700"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[11px] font-medium text-slate-700 mb-0.5">Storage Location</label>
+                                <input
+                                  type="text"
+                                  value={row.storageLocation}
+                                  onChange={(e) => updateMaterialRow(row.key, { storageLocation: e.target.value })}
+                                  placeholder="e.g. Base camp stack yard"
+                                  className="w-full p-2 border rounded text-xs bg-white"
+                                />
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={addMaterialRow}
+                    className="w-full py-2 border-2 border-dashed border-purple-400 rounded-lg text-purple-900 text-xs font-bold hover:bg-purple-100 flex items-center justify-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" /> Add Another Material
+                  </button>
+                  <p className="text-[10px] text-purple-800 bg-purple-100/70 rounded p-1.5">
+                    Har material ki receipt se GRN banega aur stock badhega; consumption & wastage se stock katega — submit par auto.
+                  </p>
                 </div>
               )}
 
