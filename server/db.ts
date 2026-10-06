@@ -2181,9 +2181,17 @@ export async function syncActivitiesFromStructures(structureId: number) {
   const allStructures = await db.select().from(roadStructures).where(eq(roadStructures.roadId, roadId));
 
   // Calculate progress per category
-  const categories: Array<{ types: string[]; activityNamePattern: string }> = [
-    { types: CD_TYPES, activityNamePattern: "cross-drainage" },
-    { types: PROTECTION_TYPES, activityNamePattern: "protection" },
+  // Match activities by keywords in their names (detailed DPR activities like
+  // "1.50 m Slab Culvert (CH 485) - Excavation" as well as generic ones)
+  const categories: Array<{ types: string[]; patterns: string[] }> = [
+    {
+      types: CD_TYPES,
+      patterns: ["cross-drainage", "culvert", "hpc", "bridge", "causeway", "cd work"],
+    },
+    {
+      types: PROTECTION_TYPES,
+      patterns: ["protection", "retaining", "toe wall", "drain"],
+    },
   ];
 
   for (const cat of categories) {
@@ -2203,11 +2211,15 @@ export async function syncActivitiesFromStructures(structureId: number) {
     const status = pct >= 100 ? "Complete" : pct > 0 ? "In Progress" : "Not Started";
 
     // Find matching activities for this road (not manually locked)
+    // Build OR conditions for each pattern
+    const patternConds = cat.patterns.map(p =>
+      sql`LOWER(${activities.activityName}) LIKE ${"%" + p + "%"}`
+    );
     const matchingActivities = await db.select().from(activities).where(
       and(
         eq(activities.roadId, roadId),
         eq(activities.isManual, false),
-        sql`LOWER(${activities.activityName}) LIKE ${"%" + cat.activityNamePattern + "%"}`
+        or(...patternConds)
       )
     );
 
