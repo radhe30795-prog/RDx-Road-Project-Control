@@ -2216,6 +2216,15 @@ export async function syncActivitiesFromStructures(structureId: number) {
         .set({ percentageComplete: pctStr, status: status as any })
         .where(eq(activities.id, act.id));
     }
+
+    // Recalculate road progress as average of all activities (for dashboard)
+    try {
+      const roadActs = await db.select().from(activities).where(eq(activities.roadId, roadId));
+      if (roadActs.length > 0) {
+        const avg = roadActs.reduce((s, a) => s + parseFloat(String(a.percentageComplete || 0)), 0) / roadActs.length;
+        await db.update(roads).set({ progress: Math.min(100, avg).toFixed(2) }).where(eq(roads.id, roadId));
+      }
+    } catch { /* road progress is best-effort */ }
   }
 }
 
