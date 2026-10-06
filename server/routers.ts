@@ -1752,12 +1752,20 @@ export const appRouter = router({
         status: z.enum(["Not Started", "In Progress", "Completed", "On Hold"]).optional(),
         billableQuantity: z.string().optional(),
         quantity: z.string().optional(),
+        completedQuantity: z.string().optional(),
         photos: z.string().optional(),
         remarks: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         const { id, ...data } = input;
-        return db.updateRoadStructure(id, data);
+        const result = await db.updateRoadStructure(id, data);
+        // Auto-update linked activities based on structure progress
+        try {
+          await db.syncActivitiesFromStructures(id);
+        } catch (e) {
+          console.error("[structures] syncActivitiesFromStructures failed:", e);
+        }
+        return result;
       }),
 
     uploadPhoto: publicProcedure
