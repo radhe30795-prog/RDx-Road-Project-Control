@@ -119,7 +119,7 @@ export default function RoadStructuresPage() {
 
   function openEditStructure(s: any) {
     setEditingStructure(s);
-    setEditBillableQty(String(s.billableQuantity || "0"));
+    setEditBillableQty(String(s.completedQuantity || s.billableQuantity || "0"));
     setEditStatus(s.status || "Not Started");
     setEditRemarks(s.remarks || "");
   }
@@ -137,6 +137,7 @@ export default function RoadStructuresPage() {
     updateStructureMutation.mutate({
       id: editingStructure.id,
       billableQuantity: editBillableQty,
+      completedQuantity: editBillableQty,
       status: autoStatus as any,
       remarks: editRemarks,
     });
@@ -563,10 +564,13 @@ export default function RoadStructuresPage() {
                         <select
                           value={s.status}
                           onChange={(e) => {
+                            const newStatus = e.target.value;
+                            const newQty = newStatus === "Completed" ? String(s.quantity) : s.billableQuantity;
                             updateStructureMutation.mutate({
                               id: s.id,
-                              status: e.target.value as any,
-                              billableQuantity: e.target.value === "Completed" ? String(s.quantity) : s.billableQuantity,
+                              status: newStatus as any,
+                              billableQuantity: newQty,
+                              completedQuantity: newQty,
                             });
                           }}
                           className="p-1 border border-slate-200 rounded text-[10px] font-bold bg-white text-slate-700"
