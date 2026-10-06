@@ -38,6 +38,7 @@ import TeamAdminPage from "./pages/TeamAdminPage";
 import ImportCenterPage from "./pages/ImportCenterPage";
 import AdminEditPanelPage from "./pages/AdminEditPanelPage";
 import HrPayrollPage from "./pages/HrPayrollPage";
+import HrLettersPage from "./pages/HrLettersPage";
 import NotFound from "./pages/NotFound";
 
 function AccessDenied({ path }: { path: string }) {
@@ -89,6 +90,7 @@ function Router() {
         <GuardedRoute path="/import" component={ImportCenterPage} />
         <GuardedRoute path="/admin-edit" component={AdminEditPanelPage} />
         <GuardedRoute path="/hr" component={HrPayrollPage} />
+        <GuardedRoute path="/hr-letters" component={HrLettersPage} />
         <GuardedRoute path="/" component={Dashboard} />
         <GuardedRoute path="/roads" component={RoadsPage} />
         <GuardedRoute path="/structures" component={RoadStructuresPage} />

@@ -100,6 +100,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
     ...(role === "admin" ? [{ href: "/import", label: "Excel Import Center", icon: FileUp, badge: "Admin" }] : []),
     ...(role === "admin" ? [{ href: "/admin-edit", label: "Central Edit Panel", icon: SlidersHorizontal, badge: "Admin" }] : []),
     ...(["admin", "hr_payroll_manager", "site_coordinator"].includes(role) ? [{ href: "/hr", label: "HR & Payroll", icon: UsersRound, highlight: true }] : []),
+    ...(["admin", "hr_payroll_manager", "site_coordinator"].includes(role) ? [{ href: "/hr-letters", label: "HR Letters", icon: FileText }] : []),
     { href: "/", label: "Executive Dashboard", icon: LayoutDashboard, badge: stats?.overallPhysicalProgress ? `${stats.overallPhysicalProgress}%` : undefined },
     { href: "/roads", label: "14 Roads Tracker", icon: Compass, count: 14 },
     { href: "/structures", label: "पुल-पुलिया & Protection Register", icon: Boxes, highlight: true },

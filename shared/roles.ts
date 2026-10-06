@@ -105,7 +105,7 @@ export const ROLE_PAGES: Record<AppRole, string[]> = {
     "/mobile-field",
   ],
 
-  hr_payroll_manager: ["/", "/my-apps", "/hr"],
+  hr_payroll_manager: ["/", "/my-apps", "/hr", "/hr-letters"],
 
   // Site Coordinator: HR + Material + DPR + Machinery (site-level ops, no commercial data)
   site_coordinator: [
@@ -113,6 +113,7 @@ export const ROLE_PAGES: Record<AppRole, string[]> = {
     "/my-apps",
     "/roads",
     "/hr",
+    "/hr-letters",
     "/materials",
     "/inventory",
     "/daily-progress",
