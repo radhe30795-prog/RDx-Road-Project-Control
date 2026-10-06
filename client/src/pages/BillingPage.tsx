@@ -80,6 +80,12 @@ export default function BillingPage() {
 
   const { data: roads } = trpc.roads.list.useQuery({ projectId: activeProjectId });
 
+  // Structures ready to bill (billableQuantity > 0)
+  const { data: structuresData } = trpc.structures.list.useQuery({ projectId: activeProjectId });
+  const readyToBillStructures = (structuresData || []).filter(({ structure: s }: any) =>
+    parseFloat(String(s.billableQuantity || "0")) > 0
+  );
+
   // Lazy query for RA Bill Excel export data (fetched only when user clicks export)
   const exportQuery = trpc.billing.getBillExportData.useQuery(
     {
@@ -296,6 +302,53 @@ export default function BillingPage() {
           Showing {bills?.length || 0} billing records
         </span>
       </div>
+
+      {/* Ready to Bill — Structures */}
+      {readyToBillStructures.length > 0 && (
+        <div className="bg-emerald-50 rounded-xl border border-emerald-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-emerald-200 flex items-center justify-between">
+            <h3 className="text-sm font-bold text-emerald-900 flex items-center gap-2">
+              <Building className="w-4 h-4" />
+              Ready to Bill — Structures ({readyToBillStructures.length})
+            </h3>
+            <span className="text-[10px] text-emerald-700">Pul-Puliya Register se billable qty</span>
+          </div>
+          <div className="overflow-auto" style={{ maxHeight: "30vh" }}>
+            <table className="w-full text-left text-xs text-slate-700">
+              <thead className="bg-emerald-100 sticky top-0 text-emerald-900 font-semibold uppercase text-[10px]">
+                <tr>
+                  <th className="py-2 px-4">Structure No</th>
+                  <th className="py-2 px-4">Type</th>
+                  <th className="py-2 px-4">Road</th>
+                  <th className="py-2 px-4">Chainage</th>
+                  <th className="py-2 px-4 text-right">Billable Qty</th>
+                  <th className="py-2 px-4">Unit</th>
+                  <th className="py-2 px-4">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-emerald-100">
+                {readyToBillStructures.map(({ structure: s, road }: any) => (
+                  <tr key={s.id} className="hover:bg-emerald-100/50">
+                    <td className="py-2 px-4 font-mono font-bold">{s.structureNo}</td>
+                    <td className="py-2 px-4">{s.structureType}</td>
+                    <td className="py-2 px-4">{road?.roadId || s.roadId}</td>
+                    <td className="py-2 px-4 font-mono">{s.chainageFrom}{s.chainageTo ? ` - ${s.chainageTo}` : ""}</td>
+                    <td className="py-2 px-4 text-right font-mono font-bold text-emerald-700">
+                      {parseFloat(String(s.billableQuantity)).toLocaleString("en-IN")}
+                    </td>
+                    <td className="py-2 px-4">{s.unit}</td>
+                    <td className="py-2 px-4">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-200 text-emerald-900">
+                        {s.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Bills Ledger Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
