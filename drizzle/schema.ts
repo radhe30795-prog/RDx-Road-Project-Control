@@ -785,6 +785,7 @@ export const roadStructures = mysqlTable("road_structures", {
   width: decimal("width", { precision: 12, scale: 3 }),
   height: decimal("height", { precision: 12, scale: 3 }),
   quantity: decimal("quantity", { precision: 14, scale: 3 }).default("0.000").notNull(),
+  completedQuantity: decimal("completedQuantity", { precision: 14, scale: 3 }).default("0.000").notNull(),
   unit: varchar("unit", { length: 30 }).default("Nos").notNull(),
   status: mysqlEnum("status", ["Not Started", "In Progress", "Completed", "On Hold"]).default("Not Started").notNull(),
   billableQuantity: decimal("billableQuantity", { precision: 14, scale: 3 }).default("0.000").notNull(),
