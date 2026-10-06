@@ -194,7 +194,7 @@
     {
       "idx": 27,
       "version": "5",
-      "when": 1790865600000,
+      "when": 1791336000000,
       "tag": "0027_activity_manual_lock",
       "breakpoints": true
     },
@@ -217,6 +217,13 @@
       "version": "5",
       "when": 1791335000000,
       "tag": "0030_fix_activities_manual_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "5",
+      "when": 1791340000000,
+      "tag": "0031_structure_completed_qty",
       "breakpoints": true
     }
   ]
