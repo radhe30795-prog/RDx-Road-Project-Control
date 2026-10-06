@@ -204,6 +204,13 @@
       "when": 1790955000000,
       "tag": "0028_bbs_module",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "5",
+      "when": 1791320000000,
+      "tag": "0029_seed_hr_masters",
+      "breakpoints": true
     }
   ]
 }
