@@ -100,15 +100,16 @@ export default function HrLettersPage() {
 
   const pickEmployee = (id: number) => {
     setEmployeeId(id);
-    const emp: any = employeeList?.find((e: any) => e.id === id);
-    if (!emp) return;
+    const row: any = employeeList?.find((e: any) => e.employee?.id === id);
+    if (!row) return;
+    const emp = row.employee || {};
     const monthly = Number(emp.basicRate || 0);
     setData((p) => ({
       ...p,
       candidateName: emp.fullName || "",
       candidateAddress: emp.address || "",
-      designation: desigName(emp.designationId) || emp.employmentType || "",
-      department: deptName(emp.departmentId),
+      designation: row.designation?.name || desigName(emp.designationId) || emp.employmentType || "",
+      department: row.department?.name || deptName(emp.departmentId),
       joiningDate: emp.joiningDate || todayISO(),
       monthlySalary: monthly > 0 ? String(Math.round(monthly)) : "",
       annualCtc: monthly > 0 ? String(Math.round(monthly * 12)) : "",
@@ -202,8 +203,8 @@ export default function HrLettersPage() {
             >
               <option value="">— Select —</option>
               {(employeeList || []).map((e: any) => (
-                <option key={e.id} value={e.id}>
-                  {e.fullName} ({e.employeeCode})
+                <option key={e.employee?.id} value={e.employee?.id}>
+                  {e.employee?.fullName} ({e.employee?.employeeCode})
                 </option>
               ))}
             </select>
