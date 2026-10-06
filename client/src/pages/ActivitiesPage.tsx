@@ -45,6 +45,7 @@ export default function ActivitiesPage() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<any>(null);
+  const [viewMode, setViewMode] = useState<"table" | "gantt">("table");
 
   // Form states
   const [taskId, setTaskId] = useState("");
@@ -218,6 +219,26 @@ export default function ActivitiesPage() {
         </div>
       </div>
 
+      {/* View Toggle: Table / Work Programme */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setViewMode("table")}
+          className={`px-4 py-2 rounded-lg text-sm font-bold transition ${viewMode === "table" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+        >
+          📋 Table View
+        </button>
+        <button
+          onClick={() => setViewMode("gantt")}
+          className={`px-4 py-2 rounded-lg text-sm font-bold transition ${viewMode === "gantt" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+        >
+          📊 Work Programme Chart
+        </button>
+      </div>
+
+      {viewMode === "gantt" ? (
+        <WorkProgrammeChart activities={filtered} />
+      ) : (
+      <>
       {/* Activities Grid / Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-auto boq-table-scroll" style={{ maxHeight: "60vh" }}>
@@ -316,6 +337,8 @@ export default function ActivitiesPage() {
           </table>
         </div>
       </div>
+      </>
+      )}
 
       {/* Modal: Add New Activity */}
       {isAddOpen && (
@@ -599,6 +622,127 @@ export default function ActivitiesPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Work Programme Chart (Gantt-style): bars by start/end dates, fill by % complete */
+function WorkProgrammeChart({ activities }: { activities: Array<{ activity: any; road: any }> }) {
+  const rows = (activities || [])
+    .map(({ activity: a, road }) => ({ a, road }))
+    .filter(({ a }) => a.startDate && a.endDate)
+    .sort((x, y) => String(x.a.startDate).localeCompare(String(y.a.startDate)));
+
+  if (rows.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500 text-sm">
+        Koi activity me start/end date nahi hai — Work Programme ke liye dates chahiye.
+      </div>
+    );
+  }
+
+  const parse = (d: string) => new Date(d + "T00:00:00").getTime();
+  const minT = Math.min(...rows.map(({ a }) => parse(a.startDate)));
+  const maxT = Math.max(...rows.map(({ a }) => parse(a.endDate)));
+  const span = Math.max(1, maxT - minT);
+  const today = new Date().setHours(0, 0, 0, 0);
+  const todayPct = span > 0 ? Math.min(100, Math.max(0, ((today - minT) / span) * 100)) : 0;
+
+  // Month labels
+  const months: Array<{ label: string; left: number }> = [];
+  {
+    const d = new Date(minT);
+    d.setDate(1);
+    while (d.getTime() <= maxT) {
+      const label = d.toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
+      months.push({ label, left: ((d.getTime() - minT) / span) * 100 });
+      d.setMonth(d.getMonth() + 1);
+    }
+  }
+
+  const barColor = (status: string, pct: number) => {
+    if (status === "Complete" || pct >= 100) return "bg-emerald-500";
+    if (status === "Overdue") return "bg-rose-500";
+    if (status === "In Progress") return "bg-blue-500";
+    if (status === "On Hold") return "bg-amber-500";
+    return "bg-slate-400";
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+        <h3 className="text-sm font-bold text-slate-800">📊 Work Programme Chart</h3>
+        <div className="flex items-center gap-3 text-[10px] text-slate-500">
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block" /> Complete</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-blue-500 inline-block" /> In Progress</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-slate-400 inline-block" /> Not Started</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-rose-500 inline-block" /> Overdue</span>
+        </div>
+      </div>
+      <div className="overflow-auto" style={{ maxHeight: "60vh" }}>
+        <div className="min-w-[900px]">
+          {/* Month header */}
+          <div className="flex border-b border-slate-200 sticky top-0 bg-white z-10">
+            <div className="w-64 shrink-0 px-4 py-2 text-[10px] font-bold uppercase text-slate-500">Activity</div>
+            <div className="flex-1 relative h-8">
+              {months.map((m, i) => (
+                <div key={i} className="absolute top-0 bottom-0 border-l border-slate-200 pl-1 text-[10px] text-slate-500 pt-2" style={{ left: `${m.left}%` }}>
+                  {m.label}
+                </div>
+              ))}
+              {/* Today line */}
+              {todayPct >= 0 && todayPct <= 100 && (
+                <div className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10" style={{ left: `${todayPct}%` }} title="Today" />
+              )}
+            </div>
+          </div>
+          {/* Rows */}
+          {rows.map(({ a, road }, idx) => {
+            const s = parse(a.startDate);
+            const e = parse(a.endDate);
+            const left = ((s - minT) / span) * 100;
+            const width = Math.max(1, ((e - s) / span) * 100);
+            const pct = Math.min(100, Math.max(0, parseFloat(String(a.percentageComplete || 0))));
+            return (
+              <div key={a.id || idx} className={`flex items-center border-b border-slate-100 hover:bg-slate-50 ${idx % 2 ? "bg-slate-50/50" : ""}`}>
+                <div className="w-64 shrink-0 px-4 py-2">
+                  <div className="text-xs font-semibold text-slate-800 truncate" title={a.activityName}>
+                    {a.taskId} — {a.activityName}
+                  </div>
+                  <div className="text-[10px] text-slate-500 truncate">
+                    {road?.roadId || ""} • {a.phase}
+                  </div>
+                </div>
+                <div className="flex-1 relative h-10 px-1">
+                  {/* Month gridlines */}
+                  {months.map((m, i) => (
+                    <div key={i} className="absolute top-0 bottom-0 border-l border-slate-100" style={{ left: `${m.left}%` }} />
+                  ))}
+                  {/* Today line */}
+                  {todayPct >= 0 && todayPct <= 100 && (
+                    <div className="absolute top-0 bottom-0 w-0.5 bg-red-500/60" style={{ left: `${todayPct}%` }} />
+                  )}
+                  {/* Bar */}
+                  <div
+                    className="absolute top-2 h-6 rounded-md bg-slate-200 overflow-hidden"
+                    style={{ left: `${left}%`, width: `${width}%` }}
+                    title={`${a.activityName}: ${a.startDate} to ${a.endDate} (${pct}%)`}
+                  >
+                    <div className={`h-full ${barColor(a.status, pct)}`} style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="absolute top-2 h-6 flex items-center px-1 pointer-events-none" style={{ left: `${left}%` }}>
+                    <span className="text-[9px] font-bold text-slate-700 bg-white/80 rounded px-1">{pct}%</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className="px-4 py-2 border-t border-slate-200 text-[10px] text-slate-500 flex items-center gap-2">
+        <span className="w-0.5 h-4 bg-red-500 inline-block" /> Today
+        <span className="ml-2">• Bar length = planned duration, fill = % complete</span>
+      </div>
     </div>
   );
 }
