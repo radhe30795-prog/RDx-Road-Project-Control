@@ -211,6 +211,13 @@
       "when": 1791320000000,
       "tag": "0029_seed_hr_masters",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "5",
+      "when": 1791335000000,
+      "tag": "0030_fix_activities_manual_columns",
+      "breakpoints": true
     }
   ]
 }
