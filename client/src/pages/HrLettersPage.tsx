@@ -82,6 +82,7 @@ const emptyData: LetterData = {
 export default function HrLettersPage() {
   const [letterType, setLetterType] = useState<LetterType>("offer");
   const [employeeId, setEmployeeId] = useState<number | "">("");
+  const [isNewCandidate, setIsNewCandidate] = useState(true);
   const [data, setData] = useState<LetterData>(emptyData);
 
   const { data: employees } = trpc.hr.employees.useQuery({ status: "Active" });
@@ -176,7 +177,12 @@ export default function HrLettersPage() {
           return (
             <button
               key={t.id}
-              onClick={() => setLetterType(t.id)}
+              onClick={() => {
+                setLetterType(t.id);
+                setEmployeeId("");
+                // Offer/Appointment default to new candidate mode
+                setIsNewCandidate(t.id === "offer" || t.id === "appointment");
+              }}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition ${
                 letterType === t.id
                   ? "bg-slate-900 text-white shadow"
@@ -194,6 +200,73 @@ export default function HrLettersPage() {
         <div className="lg:col-span-1 bg-white rounded-xl border border-slate-200 p-4 space-y-3 max-h-[75vh] overflow-y-auto">
           <h3 className="text-sm font-bold text-slate-800">Letter Details</h3>
 
+          {(letterType === "offer" || letterType === "appointment") && (
+            <div className="flex gap-2 p-1 bg-slate-100 rounded-lg">
+              <button
+                type="button"
+                onClick={() => { setIsNewCandidate(true); setEmployeeId(""); }}
+                className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold transition ${isNewCandidate ? "bg-white shadow text-slate-900" : "text-slate-500"}`}
+              >
+                ➕ New Candidate
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsNewCandidate(false)}
+                className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold transition ${!isNewCandidate ? "bg-white shadow text-slate-900" : "text-slate-500"}`}
+              >
+                👤 Existing Employee
+              </button>
+            </div>
+          )}
+
+          {(letterType === "offer" || letterType === "appointment") && isNewCandidate ? (
+            <div className="grid grid-cols-2 gap-2">
+              <div className="col-span-2">
+                <label className={labelClass}>Candidate Name *</label>
+                <input
+                  value={data.candidateName}
+                  onChange={(e) => set("candidateName", e.target.value)}
+                  placeholder="e.g. Rahul Sharma"
+                  className={fieldClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Designation</label>
+                <select
+                  value={data.designation}
+                  onChange={(e) => set("designation", e.target.value)}
+                  className={fieldClass}
+                >
+                  <option value="">— Select —</option>
+                  {(designations || []).map((d: any) => (
+                    <option key={d.id} value={d.name}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Department</label>
+                <select
+                  value={data.department}
+                  onChange={(e) => set("department", e.target.value)}
+                  className={fieldClass}
+                >
+                  <option value="">— Select —</option>
+                  {(departments || []).map((d: any) => (
+                    <option key={d.id} value={d.name}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className={labelClass}>Address</label>
+                <input
+                  value={data.candidateAddress}
+                  onChange={(e) => set("candidateAddress", e.target.value)}
+                  placeholder="Candidate address"
+                  className={fieldClass}
+                />
+              </div>
+            </div>
+          ) : (
           <div>
             <label className={labelClass}>Employee / Candidate select karein</label>
             <select
@@ -209,6 +282,7 @@ export default function HrLettersPage() {
               ))}
             </select>
           </div>
+          )}
 
           <div className="grid grid-cols-2 gap-2">
             <div>
