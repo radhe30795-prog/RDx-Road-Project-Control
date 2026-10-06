@@ -2152,6 +2152,73 @@ export async function updateRoadStructure(id: number, data: Partial<InsertRoadSt
   return db.update(roadStructures).set(data).where(eq(roadStructures.id, id));
 }
 
+/**
+ * Auto-update activities from structure progress.
+ * When a structure's completedQuantity changes, recalculate the progress %
+ * for its category and update the linked activities.
+ *
+ * Mapping:
+ * - Slab Culvert, HPC, Box Culvert, Minor Bridge, Causeway → "Cross-Drainage & Structures" activity
+ * - Retaining Wall, Toe Wall, Drain → "Protection Works" activity
+ *
+ * Formula: Activity % = (SUM completedQty / SUM totalQty) * 100 for the category on that road.
+ * Respects manual locks (isManual=true activities are skipped).
+ */
+export async function syncActivitiesFromStructures(structureId: number) {
+  const db = await getDb();
+  if (!db) return;
+
+  // Get the updated structure to find its road
+  const [structure] = await db.select().from(roadStructures).where(eq(roadStructures.id, structureId));
+  if (!structure) return;
+  const roadId = structure.roadId;
+
+  // Category mapping
+  const CD_TYPES = ["Slab Culvert", "HPC", "Box Culvert", "Minor Bridge", "Causeway"];
+  const PROTECTION_TYPES = ["Retaining Wall", "Toe Wall", "Drain"];
+
+  // Get all structures for this road
+  const allStructures = await db.select().from(roadStructures).where(eq(roadStructures.roadId, roadId));
+
+  // Calculate progress per category
+  const categories: Array<{ types: string[]; activityNamePattern: string }> = [
+    { types: CD_TYPES, activityNamePattern: "cross-drainage" },
+    { types: PROTECTION_TYPES, activityNamePattern: "protection" },
+  ];
+
+  for (const cat of categories) {
+    const catStructures = allStructures.filter(s => cat.types.includes(s.structureType));
+    if (catStructures.length === 0) continue;
+
+    let totalQty = 0;
+    let completedQty = 0;
+    for (const s of catStructures) {
+      totalQty += parseFloat(String(s.quantity || "0"));
+      completedQty += parseFloat(String((s as any).completedQuantity || "0"));
+    }
+    if (totalQty <= 0) continue;
+
+    const pct = Math.min(100, Math.max(0, (completedQty / totalQty) * 100));
+    const pctStr = pct.toFixed(2);
+    const status = pct >= 100 ? "Complete" : pct > 0 ? "In Progress" : "Not Started";
+
+    // Find matching activities for this road (not manually locked)
+    const matchingActivities = await db.select().from(activities).where(
+      and(
+        eq(activities.roadId, roadId),
+        eq(activities.isManual, false),
+        sql`LOWER(${activities.activityName}) LIKE ${"%" + cat.activityNamePattern + "%"}`
+      )
+    );
+
+    for (const act of matchingActivities) {
+      await db.update(activities)
+        .set({ percentageComplete: pctStr, status: status as any })
+        .where(eq(activities.id, act.id));
+    }
+  }
+}
+
 
 // ----------------- HR & PAYROLL FOUNDATION -----------------
 export async function getHrDepartments() {
