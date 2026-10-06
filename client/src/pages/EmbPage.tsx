@@ -62,10 +62,13 @@ export default function EmbPage() {
   });
   const { data: activities } = trpc.activities.list.useQuery({ roadId, projectId: activeProjectId });
 
-  const { data: measurements, isLoading, refetch } = trpc.measurements.list.useQuery({
+  const { data: measurements, isLoading, error: measurementsError, refetch } = trpc.measurements.list.useQuery({
     projectId: activeProjectId,
     roadId: selectedRoadId !== "All" ? parseInt(selectedRoadId) : undefined,
     boqItemId: selectedBoqId !== "All" ? parseInt(selectedBoqId) : undefined,
+  }, {
+    refetchOnMount: true,
+    staleTime: 0,
   });
 
   const createMbMutation = trpc.measurements.create.useMutation();
@@ -209,6 +212,13 @@ export default function EmbPage() {
 
   return (
     <div className="space-y-6">
+      {/* Error banner - shows if data fetch fails */}
+      {measurementsError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-700 font-medium">Data load nahi hua: {(measurementsError as any)?.message || "Unknown error"}</p>
+          <button onClick={() => refetch()} className="mt-2 text-sm text-red-600 underline">Dobara try karo</button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>

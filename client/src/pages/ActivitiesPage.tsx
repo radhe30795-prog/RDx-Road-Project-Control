@@ -60,11 +60,14 @@ export default function ActivitiesPage() {
   const [remarks, setRemarks] = useState("");
 
   const { projectId: activeProjectId } = useActiveProject();
-  const { data: activities, isLoading, refetch } = trpc.activities.list.useQuery({
+  const { data: activities, isLoading, error, refetch } = trpc.activities.list.useQuery({
     projectId: activeProjectId,
     roadId: selectedRoadId !== "All Roads" ? parseInt(selectedRoadId) : undefined,
     phase: selectedPhase !== "All Phases" ? selectedPhase : undefined,
     status: selectedStatus !== "All Statuses" ? selectedStatus : undefined,
+  }, {
+    refetchOnMount: true,
+    staleTime: 0,
   });
 
   const { data: roads } = trpc.roads.list.useQuery({ projectId: activeProjectId });
@@ -107,6 +110,13 @@ export default function ActivitiesPage() {
 
   return (
     <div className="space-y-6">
+      {/* Error banner - shows if data fetch fails */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-700 font-medium">Data load nahi hua: {(error as any)?.message || "Unknown error"}</p>
+          <button onClick={() => refetch()} className="mt-2 text-sm text-red-600 underline">Dobara try karo</button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
