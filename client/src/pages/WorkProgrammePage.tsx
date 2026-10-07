@@ -24,6 +24,8 @@ const parseD = (d: string) => new Date(d + "T00:00:00");
 export default function WorkProgrammePage() {
   const { projectId: activeProjectId, activeProject } = useActiveProject();
   const [roadId, setRoadId] = useState<string>("");
+  const [editMode, setEditMode] = useState(false);
+  const [overrides, setOverrides] = useState<Record<string, { start: string; end: string }>>({});
 
   const { data: roads } = trpc.roads.list.useQuery({ projectId: activeProjectId });
   const { data: activities } = trpc.activities.list.useQuery(
@@ -57,17 +59,29 @@ export default function WorkProgrammePage() {
       const maxE = new Date(Math.max(...ends));
       const avg = acts.reduce((s, a) => s + parseFloat(String(a.percentageComplete || 0)), 0) / acts.length;
       const remark = avg >= 100 ? "COMPLETED" : avg > 0 ? "IN PROGRESS" : "";
+      const ov = overrides[pr.phase];
       out.push({
         sno: sno++,
         name: pr.label,
-        startDate: minS.toISOString().slice(0, 10),
-        endDate: maxE.toISOString().slice(0, 10),
+        startDate: ov?.start || minS.toISOString().slice(0, 10),
+        endDate: ov?.end || maxE.toISOString().slice(0, 10),
         avgPct: Math.round(avg),
         remark,
       });
     }
     return out;
-  }, [roadActivities]);
+  }, [roadActivities, overrides]);
+
+  const setOverride = (phase: string, key: "start" | "end", val: string) => {
+    const base = phases.find((p) => PHASE_ROWS.find((pr) => pr.label === p.name)?.phase === phase);
+    setOverrides((o) => ({
+      ...o,
+      [phase]: {
+        start: key === "start" ? val : o[phase]?.start || base?.startDate || "",
+        end: key === "end" ? val : o[phase]?.end || base?.endDate || "",
+      },
+    }));
+  };
 
   const months = useMemo(() => {
     if (!activeProject) return [];
@@ -135,6 +149,22 @@ export default function WorkProgrammePage() {
             ))}
           </select>
           <button
+            onClick={() => setEditMode((v) => !v)}
+            disabled={!road}
+            className={`px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-40 ${editMode ? "bg-amber-500 text-white hover:bg-amber-600" : "bg-slate-200 text-slate-700 hover:bg-slate-300"}`}
+          >
+            ✏️ {editMode ? "Done Editing" : "Edit Plan"}
+          </button>
+          {Object.keys(overrides).length > 0 && (
+            <button
+              onClick={() => setOverrides({})}
+              className="px-3 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 underline"
+              title="Wapas activity dates par lao"
+            >
+              Reset dates
+            </button>
+          )}
+          <button
             onClick={handleDownload}
             disabled={!road || phases.length === 0}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 disabled:opacity-40"
@@ -197,11 +227,32 @@ export default function WorkProgrammePage() {
                   ))}
                   <td className="border" />
                 </tr>
-                {phases.map((p) => (
+                {phases.map((p) => {
+                  const phaseKey = PHASE_ROWS.find((pr) => pr.label === p.name)?.phase || "";
+                  return (
                   <React.Fragment key={p.sno}>
                     <tr>
                       <td className="border text-center py-2 font-semibold">{p.sno}</td>
-                      <td className="border px-3 py-2 font-semibold">{p.name}</td>
+                      <td className="border px-3 py-2 font-semibold">
+                        {p.name}
+                        {editMode && (
+                          <div className="flex items-center gap-1 mt-1 text-[10px] font-normal">
+                            <input
+                              type="date"
+                              value={p.startDate}
+                              onChange={(e) => setOverride(phaseKey, "start", e.target.value)}
+                              className="border border-amber-400 rounded px-1 py-0.5 text-[10px]"
+                            />
+                            <span>→</span>
+                            <input
+                              type="date"
+                              value={p.endDate}
+                              onChange={(e) => setOverride(phaseKey, "end", e.target.value)}
+                              className="border border-amber-400 rounded px-1 py-0.5 text-[10px]"
+                            />
+                          </div>
+                        )}
+                      </td>
                       {months.map((m, i) => (
                         <td
                           key={i}
@@ -212,7 +263,8 @@ export default function WorkProgrammePage() {
                     </tr>
                     <tr><td colSpan={3 + months.length} className="py-1" /></tr>
                   </React.Fragment>
-                ))}
+                  );
+                })}
                 <tr>
                   <td colSpan={3 + months.length} className="text-right font-bold py-4 pr-8">
                     FOR {`M/S ${(activeProject as any)?.contractor?.toUpperCase()}`}
