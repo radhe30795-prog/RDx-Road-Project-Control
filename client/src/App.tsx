@@ -15,6 +15,7 @@ import Dashboard from "./pages/Dashboard";
 import RoadsPage from "./pages/RoadsPage";
 import RoadStructuresPage from "./pages/RoadStructuresPage";
 import ActivitiesPage from "./pages/ActivitiesPage";
+import WorkProgrammePage from "./pages/WorkProgrammePage";
 import BoqPage from "./pages/BoqPage";
 import EmbPage from "./pages/EmbPage";
 import DailyProgressPage from "./pages/DailyProgressPage";
@@ -95,6 +96,7 @@ function Router() {
         <GuardedRoute path="/roads" component={RoadsPage} />
         <GuardedRoute path="/structures" component={RoadStructuresPage} />
         <GuardedRoute path="/activities" component={ActivitiesPage} />
+        <GuardedRoute path="/work-programme" component={WorkProgrammePage} />
         <GuardedRoute path="/boq" component={BoqPage} />
         <GuardedRoute path="/emb" component={EmbPage} />
         <GuardedRoute path="/daily-progress" component={DailyProgressPage} />

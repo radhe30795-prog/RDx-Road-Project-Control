@@ -37,7 +37,8 @@ import {
   FileUp,
   SlidersHorizontal,
   Calculator,
-  Target
+  Target,
+  CalendarClock
 } from "lucide-react";
 import { trpc } from "../lib/trpc";
 import { useAuth } from "../_core/hooks/useAuth";
@@ -105,6 +106,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
     { href: "/roads", label: "14 Roads Tracker", icon: Compass, count: 14 },
     { href: "/structures", label: "पुल-पुलिया & Protection Register", icon: Boxes, highlight: true },
     { href: "/activities", label: "Activities & Phases", icon: ListTodo, count: stats?.totalActivities },
+    { href: "/work-programme", label: "Work Programme", icon: CalendarClock },
     { href: "/boq", label: "BOQ Master & Quantities", icon: FileSpreadsheet, highlight: true },
     { href: "/emb", label: "e-MB Measurement Book", icon: Ruler, highlight: true },
     { href: "/daily-progress", label: "Daily Site Progress (DPR)", icon: TrendingUp },
